@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === The Command Matrix Design System === */
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+  }
+
+  body {
+    background-color: theme('colors.surface');
+    color: theme('colors.secondary');
+    font-family: theme('fontFamily.ui');
+    font-size: theme('fontSize.body-md');
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* No-Line Rule: no 1px solid borders for sectioning */
+  hr {
+    border: none;
+    height: 1px;
+    background: theme('colors.outline-dim');
+  }
+
+  /* Scrollbar styling - subtle */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: theme('colors.outline-dim');
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.outline');
+  }
+
+  /* Focus style — ghost border transition, no thick rings */
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: theme('colors.primary');
+    border-color: rgb(0 228 117 / 0.8);
+  }
+}
+
+@layer components {
+  /* === Surface layers === */
+  .card {
+    @apply rounded border border-outline/15 bg-surface-high p-card transition-colors;
+  }
+  .card:hover {
+    @apply bg-surface-active;
+  }
+
+  /* === Ghost border — 15% opacity "barely there" === */
+  .ghost-border {
+    @apply border border-outline/15;
+  }
+  .ghost-border-focus {
+    border-color: rgb(66 71 84 / 0.8);
+  }
+
+  /* === Buttons === */
+  .btn-primary {
+    @apply rounded bg-primary-dim px-3 py-1.5 text-xs text-primary transition-colors;
+  }
+  .btn-primary:hover {
+    @apply bg-primary/30;
+  }
+
+  .btn-ghost {
+    @apply rounded border border-outline/15 bg-transparent px-2 py-1 text-label-sm text-secondary transition-colors;
+  }
+  .btn-ghost:hover {
+    @apply bg-surface-active;
+  }
+
+  .btn-danger {
+    @apply rounded border border-error/30 px-2 py-1 text-label-sm text-error transition-colors;
+  }
+  .btn-danger:hover {
+    @apply bg-error/10;
+  }
+
+  /* === Glow Tag — status indicator === */
+  .glow-tag {
+    @apply inline-flex items-center gap-1 text-label-sm;
+  }
+  .glow-tag::before {
+    content: '';
+    @apply block h-1.5 w-1.5 rounded-full;
+    box-shadow: 0 0 12px currentColor;
+  }
+  .glow-tag--success { @apply text-primary; }
+  .glow-tag--success::before { @apply bg-primary; }
+  .glow-tag--warning { @apply text-tertiary; }
+  .glow-tag--warning::before { @apply bg-tertiary; }
+  .glow-tag--error { @apply text-error; }
+  .glow-tag--error::before { @apply bg-error; }
+
+  /* === Input fields === */
+  .input-field {
+    @apply w-full rounded bg-surface-lowest border border-outline/15 px-3 py-1.5 text-sm text-secondary font-mono transition-colors;
+  }
+
+  /* === Dialog / Modal overlay === */
+  .dialog-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center;
+  }
+  .dialog-backdrop {
+    @apply absolute inset-0 bg-black/60;
+  }
+  .dialog-content {
+    @apply relative w-full max-w-lg rounded border border-outline/15 bg-surface-high p-4;
+  }
+
+  /* === Toast === */
+  .toast {
+    @apply rounded px-3 py-2 text-xs max-w-sm shadow-lg cursor-pointer;
+  }
+  .toast--error {
+    @apply bg-error-dim text-error border border-error/30;
+  }
+  .toast--success {
+    @apply bg-primary-dim text-primary border border-primary/30;
+  }
+  .toast--info {
+    @apply bg-secondary-dim text-secondary border border-secondary/30;
+  }
+}

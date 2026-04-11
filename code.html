@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CommandMatrix | Dev Control Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#2d3136",
+                        "tertiary-fixed": "#ffddb8",
+                        "secondary-fixed": "#d8e2ff",
+                        "on-secondary-fixed": "#001a42",
+                        "on-primary-container": "#003114",
+                        "surface-variant": "#31353b",
+                        "background": "#101419",
+                        "inverse-primary": "#006d35",
+                        "outline": "#8c909f",
+                        "surface-container": "#1c2025",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "on-tertiary-fixed": "#2a1700",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "primary-fixed": "#62ff96",
+                        "primary-fixed-dim": "#00e475",
+                        "tertiary-container": "#ca8100",
+                        "surface-dim": "#101419",
+                        "outline-variant": "#424754",
+                        "surface-tint": "#00e475",
+                        "on-secondary-fixed-variant": "#004395",
+                        "on-surface": "#e0e2ea",
+                        "inverse-surface": "#e0e2ea",
+                        "on-surface-variant": "#c2c6d6",
+                        "on-tertiary": "#472a00",
+                        "surface-container-high": "#262a30",
+                        "primary": "#00e475",
+                        "on-secondary-container": "#e6ecff",
+                        "surface": "#101419",
+                        "primary-container": "#00a754",
+                        "on-background": "#e0e2ea",
+                        "on-primary": "#003918",
+                        "surface-container-low": "#181c21",
+                        "on-tertiary-container": "#3e2400",
+                        "secondary": "#adc6ff",
+                        "surface-container-lowest": "#0a0e13",
+                        "error": "#ffb4ab",
+                        "on-error-container": "#ffdad6",
+                        "tertiary": "#ffb95f",
+                        "on-primary-fixed-variant": "#005226",
+                        "surface-container-highest": "#31353b",
+                        "surface-bright": "#36393f",
+                        "secondary-container": "#0566d9",
+                        "error-container": "#93000a",
+                        "tertiary-fixed-dim": "#ffb95f",
+                        "on-primary-fixed": "#00210b",
+                        "on-secondary": "#002e6a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+            font-size: 18px;
+        }
+        .glow-dot {
+            box-shadow: 0 0 8px currentColor;
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background-color: rgba(28, 32, 37, 0.6);
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #0a0e13; }
+        ::-webkit-scrollbar-thumb { background: #424754; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30 selection:text-primary overflow-hidden">
+<!-- TopNavBar -->
+<header class="bg-[#101419] border-b border-[#424754]/15 fixed top-0 left-0 w-full h-12 z-50 flex justify-between items-center px-4">
+<div class="flex items-center gap-6">
+<span class="text-xl font-bold tracking-tighter text-[#00e475]">CommandMatrix</span>
+<nav class="hidden md:flex gap-4">
+<a class="text-[#00e475] border-b-2 border-[#00e475] pb-1 font-['Space_Grotesk'] tracking-tight text-sm uppercase" href="#">Cluster</a>
+<a class="text-[#adc6ff]/70 hover:bg-[#424754]/10 hover:text-[#00e475] transition-colors font-['Space_Grotesk'] tracking-tight text-sm uppercase" href="#">Registry</a>
+<a class="text-[#adc6ff]/70 hover:bg-[#424754]/10 hover:text-[#00e475] transition-colors font-['Space_Grotesk'] tracking-tight text-sm uppercase" href="#">Logs</a>
+</nav>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-3 h-8 bg-surface-container-highest text-[#adc6ff]/70 text-[0.6875rem] font-medium uppercase tracking-wider hover:bg-[#424754]/20 transition-all border border-outline-variant/15">
+<span class="material-symbols-outlined text-[16px]">search</span>
+                Scan Projects
+            </button>
+<button class="flex items-center gap-2 px-3 h-8 bg-primary-container text-on-primary-container text-[0.6875rem] font-bold uppercase tracking-wider hover:opacity-80 duration-100">
+<span class="material-symbols-outlined text-[16px]">add</span>
+                Add Project
+            </button>
+</div>
+</header>
+<!-- SideNavBar (Left) -->
+<aside class="fixed left-0 top-12 h-[calc(100vh-3rem)] w-64 bg-[#101419] border-r border-[#424754]/15 flex flex-col py-4 z-40">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center border border-primary/20">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<div>
+<p class="font-headline font-bold text-sm tracking-tight">Terminal_Root</p>
+<p class="text-[0.6rem] text-on-surface-variant flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary glow-dot"></span>
+                        Active Session: 4h 12m
+                    </p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 bg-[#424754]/20 text-[#00e475] border-l-2 border-[#00e475] font-['Inter'] text-[0.6875rem] font-medium tracking-wide translate-x-1 duration-150" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#adc6ff]/50 hover:bg-[#424754]/10 hover:text-[#adc6ff] transition-all font-['Inter'] text-[0.6875rem] font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">rocket_launch</span>
+                Deployments
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#adc6ff]/50 hover:bg-[#424754]/10 hover:text-[#adc6ff] transition-all font-['Inter'] text-[0.6875rem] font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">developer_board</span>
+                Infrastructure
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#adc6ff]/50 hover:bg-[#424754]/10 hover:text-[#adc6ff] transition-all font-['Inter'] text-[0.6875rem] font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">shield_lock</span>
+                Security
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#adc6ff]/50 hover:bg-[#424754]/10 hover:text-[#adc6ff] transition-all font-['Inter'] text-[0.6875rem] font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+</nav>
+<div class="mt-auto px-3 space-y-4">
+<button class="w-full h-9 bg-surface-container-low border border-outline-variant/20 text-on-surface text-xs font-headline hover:bg-surface-container-high transition-colors">
+                Quick Execute
+            </button>
+<div class="pt-4 border-t border-outline-variant/10 space-y-1">
+<a class="flex items-center gap-3 px-3 py-1.5 text-[#adc6ff]/50 hover:text-primary transition-colors text-[0.6875rem]" href="#">
+<span class="material-symbols-outlined text-[18px]">menu_book</span>
+                    Docs
+                </a>
+<a class="flex items-center gap-3 px-3 py-1.5 text-[#adc6ff]/50 hover:text-primary transition-colors text-[0.6875rem]" href="#">
+<span class="material-symbols-outlined text-[18px]">contact_support</span>
+                    Support
+                </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-12 h-[calc(100vh-3rem)] overflow-y-auto bg-surface-container-lowest grid grid-cols-12 gap-0">
+<!-- Dashboard Header -->
+<div class="col-span-12 p-6 flex items-baseline justify-between border-b border-outline-variant/10">
+<div>
+<h1 class="font-headline text-2xl font-bold tracking-tight text-on-surface">Dev Control Center</h1>
+<p class="font-mono text-[0.65rem] text-on-surface-variant uppercase tracking-[0.2em] mt-1 opacity-60">System Observer / Local Environment</p>
+</div>
+<div class="flex gap-8">
+<div class="text-right">
+<p class="text-[0.6rem] text-on-surface-variant uppercase tracking-widest font-bold">Health</p>
+<p class="font-headline text-lg font-medium text-primary">99.8%</p>
+</div>
+<div class="text-right">
+<p class="text-[0.6rem] text-on-surface-variant uppercase tracking-widest font-bold">Active Threads</p>
+<p class="font-headline text-lg font-medium text-secondary">14/24</p>
+</div>
+</div>
+</div>
+<!-- Project Grid -->
+<section class="col-span-12 lg:col-span-9 p-6 overflow-y-auto">
+<div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+<!-- Project Card 1: Active -->
+<article class="bg-surface-container-low border border-outline-variant/15 flex flex-col group hover:border-primary/40 transition-all duration-300">
+<div class="p-4 flex flex-col h-full">
+<div class="flex justify-between items-start mb-3">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-headline text-base font-bold text-on-surface group-hover:text-primary transition-colors">quantum-edge-proxy</h3>
+<span class="text-[0.65rem] px-1.5 py-0.5 bg-secondary-container/20 text-secondary border border-secondary/20 font-mono">WSL</span>
+</div>
+<div class="flex gap-1.5">
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">Backend</span>
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">Rust</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="flex items-center gap-1.5 text-primary font-mono text-[0.65rem] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-primary glow-dot"></span>
+                                    ACTIVE
+                                </span>
+<span class="text-[0.6rem] text-on-surface-variant mt-1">v2.4.1-rc</span>
+</div>
+</div>
+<div class="flex-1 space-y-3 mb-4">
+<div class="flex items-center gap-3">
+<div class="flex-1">
+<p class="text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-widest mb-1">Current Agent</p>
+<div class="flex items-center gap-2 text-xs font-mono text-tertiary">
+<span class="material-symbols-outlined text-[14px]">smart_toy</span>
+                                        Claude-3.5-Sonnet
+                                    </div>
+</div>
+<div class="text-right">
+<p class="text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-widest mb-1">Last Update</p>
+<p class="text-xs font-mono text-on-surface-variant">2m ago</p>
+</div>
+</div>
+<div class="h-1 w-full bg-surface-container-highest overflow-hidden">
+<div class="h-full bg-primary shadow-[0_0_8px_rgba(0,228,117,0.4)] w-[75%]"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-auto">
+<div class="col-span-2 flex gap-1 mb-1">
+<button class="flex-1 h-7 bg-surface-container-highest hover:bg-outline-variant/30 transition-colors flex items-center justify-center gap-1.5 text-[0.65rem] font-medium border border-outline-variant/10">
+<span class="material-symbols-outlined text-[14px]">code</span>
+                                    VSCode
+                                </button>
+<button class="flex-1 h-7 bg-surface-container-highest hover:bg-outline-variant/30 transition-colors flex items-center justify-center gap-1.5 text-[0.65rem] font-medium border border-outline-variant/10">
+<span class="material-symbols-outlined text-[14px]">terminal</span>
+                                    Shell
+                                </button>
+</div>
+<button class="h-8 bg-surface-container-highest text-tertiary hover:bg-tertiary/10 text-[0.65rem] font-bold uppercase tracking-wider transition-all border border-tertiary/20">
+                                Start Agent
+                            </button>
+<button class="h-8 bg-primary text-on-primary text-[0.65rem] font-bold uppercase tracking-wider hover:shadow-[0_0_15px_rgba(0,228,117,0.3)] transition-all">
+                                Continue
+                            </button>
+</div>
+</div>
+</article>
+<!-- Project Card 2: In Progress -->
+<article class="bg-surface-container-low border border-outline-variant/15 flex flex-col group hover:border-tertiary/40 transition-all duration-300">
+<div class="p-4 flex flex-col h-full">
+<div class="flex justify-between items-start mb-3">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-headline text-base font-bold text-on-surface group-hover:text-tertiary transition-colors">atlas-frontend-v5</h3>
+<span class="text-[0.65rem] px-1.5 py-0.5 bg-secondary-container/20 text-secondary border border-secondary/20 font-mono">WIN</span>
+</div>
+<div class="flex gap-1.5">
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">Frontend</span>
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">Next.js</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="flex items-center gap-1.5 text-tertiary font-mono text-[0.65rem] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary glow-dot"></span>
+                                    PROCESSING
+                                </span>
+<span class="text-[0.6rem] text-on-surface-variant mt-1">local:3000</span>
+</div>
+</div>
+<div class="flex-1 space-y-3 mb-4">
+<div class="flex items-center gap-3">
+<div class="flex-1">
+<p class="text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-widest mb-1">Current Agent</p>
+<div class="flex items-center gap-2 text-xs font-mono text-tertiary">
+<span class="material-symbols-outlined text-[14px]">smart_toy</span>
+                                        QwenCode-72B
+                                    </div>
+</div>
+<div class="text-right">
+<p class="text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-widest mb-1">Activity</p>
+<p class="text-xs font-mono text-on-surface-variant">Syncing...</p>
+</div>
+</div>
+<div class="h-1 w-full bg-surface-container-highest overflow-hidden">
+<div class="h-full bg-tertiary shadow-[0_0_8px_rgba(255,185,95,0.4)] w-[42%]"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-auto">
+<div class="col-span-2 flex gap-1 mb-1">
+<button class="flex-1 h-7 bg-surface-container-highest hover:bg-outline-variant/30 transition-colors flex items-center justify-center gap-1.5 text-[0.65rem] font-medium border border-outline-variant/10">
+<span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                                    Cursor
+                                </button>
+<button class="flex-1 h-7 bg-surface-container-highest hover:bg-outline-variant/30 transition-colors flex items-center justify-center gap-1.5 text-[0.65rem] font-medium border border-outline-variant/10">
+<span class="material-symbols-outlined text-[14px]">terminal</span>
+                                    Shell
+                                </button>
+</div>
+<button class="h-8 bg-surface-container-highest text-tertiary hover:bg-tertiary/10 text-[0.65rem] font-bold uppercase tracking-wider transition-all border border-tertiary/20">
+                                Switching...
+                            </button>
+<button class="h-8 bg-tertiary text-on-tertiary text-[0.65rem] font-bold uppercase tracking-wider hover:shadow-[0_0_15px_rgba(255,185,95,0.3)] transition-all">
+                                Open HUD
+                            </button>
+</div>
+</div>
+</article>
+<!-- Project Card 3: Idle -->
+<article class="bg-surface-container-low border border-outline-variant/15 flex flex-col group hover:border-secondary/40 transition-all duration-300">
+<div class="p-4 flex flex-col h-full">
+<div class="flex justify-between items-start mb-3">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-headline text-base font-bold text-on-surface group-hover:text-secondary transition-colors">infra-orch-v2</h3>
+<span class="text-[0.65rem] px-1.5 py-0.5 bg-secondary-container/20 text-secondary border border-secondary/20 font-mono">WSL</span>
+</div>
+<div class="flex gap-1.5">
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">DevOps</span>
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">Go</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="flex items-center gap-1.5 text-on-surface-variant font-mono text-[0.65rem] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+                                    IDLE
+                                </span>
+<span class="text-[0.6rem] text-on-surface-variant mt-1">Last: 4h ago</span>
+</div>
+</div>
+<div class="flex-1 space-y-3 mb-4">
+<div class="flex items-center gap-3">
+<div class="flex-1">
+<p class="text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-widest mb-1">Preferred Agent</p>
+<div class="flex items-center gap-2 text-xs font-mono text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]">smart_toy</span>
+                                        OpenCode-32B
+                                    </div>
+</div>
+<div class="text-right">
+<p class="text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-widest mb-1">Activity</p>
+<p class="text-xs font-mono text-on-surface-variant">None</p>
+</div>
+</div>
+<div class="h-1 w-full bg-surface-container-highest overflow-hidden">
+<div class="h-full bg-outline-variant w-0"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-auto">
+<div class="col-span-2 flex gap-1 mb-1">
+<button class="flex-1 h-7 bg-surface-container-highest hover:bg-outline-variant/30 transition-colors flex items-center justify-center gap-1.5 text-[0.65rem] font-medium border border-outline-variant/10">
+<span class="material-symbols-outlined text-[14px]">code</span>
+                                    VSCode
+                                </button>
+<button class="flex-1 h-7 bg-surface-container-highest hover:bg-outline-variant/30 transition-colors flex items-center justify-center gap-1.5 text-[0.65rem] font-medium border border-outline-variant/10">
+<span class="material-symbols-outlined text-[14px]">terminal</span>
+                                    Shell
+                                </button>
+</div>
+<button class="h-8 bg-surface-container-highest text-on-surface-variant hover:bg-primary/10 hover:text-primary text-[0.65rem] font-bold uppercase tracking-wider transition-all border border-outline-variant/10">
+                                Wake Agent
+                            </button>
+<button class="h-8 border border-outline-variant/20 text-on-surface-variant text-[0.65rem] font-bold uppercase tracking-wider hover:bg-surface-container-high transition-all">
+                                Open Stats
+                            </button>
+</div>
+</div>
+</article>
+<!-- Project Card 4: Active -->
+<article class="bg-surface-container-low border border-outline-variant/15 flex flex-col group hover:border-primary/40 transition-all duration-300">
+<div class="p-4 flex flex-col h-full">
+<div class="flex justify-between items-start mb-3">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-headline text-base font-bold text-on-surface group-hover:text-primary transition-colors">matrix-data-viz</h3>
+<span class="text-[0.65rem] px-1.5 py-0.5 bg-secondary-container/20 text-secondary border border-secondary/20 font-mono">WSL</span>
+</div>
+<div class="flex gap-1.5">
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">Tools</span>
+<span class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter bg-surface-container-highest px-1.5 py-0.5">D3.js</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 text-primary font-mono text-[0.65rem] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-primary glow-dot"></span>
+                                ACTIVE
+                            </div>
+</div>
+<div class="flex-1 space-y-3 mb-4">
+<div class="flex items-center gap-3">
+<div class="flex-1">
+<p class="text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-widest mb-1">Agent Status</p>
+<div class="flex items-center gap-2 text-xs font-mono text-primary">
+<span class="material-symbols-outlined text-[14px]">bolt</span>
+                                        Streaming Logs
+                                    </div>
+</div>
+</div>
+<div class="h-1 w-full bg-surface-container-highest overflow-hidden">
+<div class="h-full bg-primary shadow-[0_0_8px_rgba(0,228,117,0.4)] w-[92%]"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-auto">
+<button class="col-span-2 h-7 bg-surface-container-highest hover:bg-outline-variant/30 transition-colors flex items-center justify-center gap-1.5 text-[0.65rem] font-medium border border-outline-variant/10">
+<span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                                Open in Cursor
+                            </button>
+<button class="h-8 bg-surface-container-highest text-tertiary hover:bg-tertiary/10 text-[0.65rem] font-bold uppercase tracking-wider transition-all border border-tertiary/20">
+                                Stop
+                            </button>
+<button class="h-8 bg-primary text-on-primary text-[0.65rem] font-bold uppercase tracking-wider hover:shadow-[0_0_15px_rgba(0,228,117,0.3)] transition-all">
+                                Continue
+                            </button>
+</div>
+</div>
+</article>
+<!-- Skeleton/Placeholder for data density -->
+<div class="border border-outline-variant/5 bg-surface-container-lowest/50 flex items-center justify-center p-8 opacity-20">
+<span class="material-symbols-outlined text-4xl">add_circle</span>
+</div>
+</div>
+</section>
+<!-- Right Side Panel: Memory & Telemetry -->
+<aside class="hidden lg:flex lg:col-span-3 flex-col border-l border-outline-variant/15 bg-surface-container-low p-6 overflow-y-auto">
+<div class="mb-8">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-tertiary">memory</span>
+<h2 class="font-headline font-bold text-sm tracking-widest uppercase">Memory Preview</h2>
+</div>
+<div class="space-y-4">
+<div class="bg-surface-container-lowest p-4 border-l-2 border-primary/40">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[0.6rem] font-mono text-primary uppercase">Session Summary</span>
+<span class="text-[0.6rem] text-on-surface-variant font-mono">14:24:01</span>
+</div>
+<p class="text-xs text-on-surface-variant leading-relaxed font-mono">
+                            Refactored proxy layer to use asynchronous traits. Optimized thread pooling for high-concurrency stress tests. Memory leak in WebSocket handler resolved.
+                        </p>
+</div>
+<div class="bg-surface-container-lowest p-4 border-l-2 border-tertiary/40">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[0.6rem] font-mono text-tertiary uppercase">Pending Tasks</span>
+</div>
+<ul class="text-[0.65rem] text-on-surface space-y-2 font-mono">
+<li class="flex items-center gap-2">
+<span class="w-1 h-1 bg-tertiary"></span>
+                                Implement Auth middleware
+                            </li>
+<li class="flex items-center gap-2">
+<span class="w-1 h-1 bg-tertiary"></span>
+                                Migration to K8s manifest
+                            </li>
+<li class="flex items-center gap-2 opacity-50 line-through">
+<span class="w-1 h-1 bg-tertiary"></span>
+                                Fix CSS grid overflow
+                            </li>
+</ul>
+</div>
+</div>
+</div>
+<div class="mt-auto">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-secondary">analytics</span>
+<h2 class="font-headline font-bold text-sm tracking-widest uppercase">Global Telemetry</h2>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<span class="text-[0.6rem] text-on-surface-variant uppercase font-bold">CPU LOAD</span>
+<span class="text-xs font-mono text-primary">24%</span>
+</div>
+<div class="h-1 bg-surface-container-highest">
+<div class="h-full bg-primary w-[24%]"></div>
+</div>
+<div class="flex justify-between items-end">
+<span class="text-[0.6rem] text-on-surface-variant uppercase font-bold">MEM UTIL</span>
+<span class="text-xs font-mono text-secondary">6.8 GB</span>
+</div>
+<div class="h-1 bg-surface-container-highest">
+<div class="h-full bg-secondary w-[58%]"></div>
+</div>
+<div class="mt-6 p-4 bg-surface-container-high border border-outline-variant/10">
+<img class="w-full h-24 object-cover grayscale opacity-40 hover:grayscale-0 hover:opacity-80 transition-all duration-700 mb-3" data-alt="abstract close-up of a server motherboard with glowing circuit traces and green neon light accents in a dark tech environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtse_6JpWy4c5Ss6Wd96ecVjnDGZggx5RspH6owlFkU4qVntjPatkgU2QJEHLtkvSZa-8xeCPcSO0EVRETJSXDle24yGIKTQeLtX_d2huu12q6hIsQRc4JvycV4aV9q8FBeOiALLj6gYgztftnHtXf57QkNNoZmFlpzshH7sbQZxhhC7_1Tq83i1r6_aszYQl8SaPmE3ye2tMe4StJuh6bxiZoskRBezja576p2D2eCp2ZY44avfEZGoSlOhfVOgRswfDYb8cffB5q"/>
+<p class="text-[0.6rem] text-on-surface-variant font-mono text-center">CLUSTER-ID: 88-X02-ALPHA</p>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- Bottom Navigation (Mobile Only) -->
+<footer class="md:hidden fixed bottom-0 left-0 w-full bg-surface-container h-16 flex items-center justify-around px-4 border-t border-outline-variant/10 z-50">
+<button class="flex flex-col items-center text-primary">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[0.6rem] uppercase tracking-tighter mt-1">Home</span>
+</button>
+<button class="flex flex-col items-center text-on-surface-variant">
+<span class="material-symbols-outlined">rocket_launch</span>
+<span class="text-[0.6rem] uppercase tracking-tighter mt-1">Deploy</span>
+</button>
+<div class="relative -top-4">
+<button class="w-12 h-12 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<button class="flex flex-col items-center text-on-surface-variant">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[0.6rem] uppercase tracking-tighter mt-1">Stats</span>
+</button>
+<button class="flex flex-col items-center text-on-surface-variant">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[0.6rem] uppercase tracking-tighter mt-1">Set</span>
+</button>
+</footer>
+</body></html>

@@ -1,0 +1,82 @@
+# generated: 2026-04-10
+# last_updated: 2026-04-10
+# project: Dev Control Center
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: /home/marioyahuar/AgentHub/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-04-10
+last_updated: 2026-04-10
+project: Dev Control Center
+project_key: NOKEY
+tracking_system: file-system
+story_location: /home/marioyahuar/AgentHub/_bmad-output/implementation-artifacts
+
+development_status:
+  # ========== EPIC 1: Setup & Gestión de Proyectos ==========
+  epic-1: done
+  1-1-scaffold-tauri-app-configurar-permisos: done
+  1-2-crud-proyectos-rust-projects-json: done
+  1-3-frontend-dashboard-basico-con-projectlist-addprojectdialog: done
+  1-4-conexion-a-neon-read-only: backlog
+  epic-1-retrospective: optional
+
+  # ========== EPIC 2: Acciones Locales — Abrir Herramientas ==========
+  epic-2: done
+  2-1-abrir-editores-vscode-cursor: done
+  2-2-lanzar-agentes-claude-code-opencode-qwencode: done
+  2-3-frontend-botones-de-accion-en-projectcard: done
+  epic-2-retrospective: optional
+
+  # ========== EPIC 3: Polish Visual — The Command Matrix ==========
+  epic-3: done
+  3-1-design-tokens-layout-base: done
+  3-2-status-indicators-detalles-visuales: done
+  epic-3-retrospective: optional
+
+  # ========== EPIC 4: Mejoras de Usabilidad ==========
+  epic-4: done
+  4-1-tracking-lastopenedat: done
+  4-2-ordenar-proyectos-por-lastopenedat: done
+  4-3-search-filter-de-proyectos: done
+  epic-4-retrospective: optional
+
+  # ========== EPIC 5: Historial de Sesiones ==========
+  epic-5: backlog
+  5-1-persistir-log-de-sesiones: backlog
+  5-2-mostrar-lista-de-sesiones-en-projectcard: backlog
+  5-3-reabrir-sesion: backlog
+  epic-5-retrospective: optional
+
+  # ========== EPICS BLOQUEADOS (dependen de Neon) ==========
+  epic-continue-work: backlog
+  epic-dashboard-con-estado: backlog

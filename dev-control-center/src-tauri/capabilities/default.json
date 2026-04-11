@@ -1,0 +1,34 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for Dev Control Center",
+  "local": true,
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "log:default",
+    "shell:allow-execute",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "exec-code", "cmd": "code", "args": true },
+        { "name": "exec-cursor", "cmd": "cursor", "args": true },
+        { "name": "exec-claude", "cmd": "claude", "args": true },
+        { "name": "exec-opencode", "cmd": "opencode", "args": true },
+        { "name": "exec-qwen", "cmd": "qwen", "args": true },
+        { "name": "exec-wsl", "cmd": "wsl", "args": true },
+        { "name": "exec-which", "cmd": "which", "args": true },
+        { "name": "exec-where", "cmd": "where", "args": true },
+        { "name": "exec-wt", "cmd": "wt", "args": true },
+        { "name": "exec-open", "cmd": "open", "args": true },
+        { "name": "exec-bash", "cmd": "bash", "args": true },
+        { "name": "exec-cmd", "cmd": "cmd", "args": true }
+      ]
+    },
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$HOME/.dev-control-center/**"]
+    }
+  ]
+}
