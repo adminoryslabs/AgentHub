@@ -71,10 +71,10 @@ development_status:
   epic-4-retrospective: optional
 
   # ========== EPIC 5: Historial de Sesiones ==========
-  epic-5: backlog
-  5-1-persistir-log-de-sesiones: backlog
-  5-2-mostrar-lista-de-sesiones-en-projectcard: backlog
-  5-3-reabrir-sesion: backlog
+  epic-5: done
+  5-1-detectar-sesiones-de-agentes-en-directorio: done
+  5-2-mostrar-lista-de-sesiones-expandible: done
+  5-3-reabrir-sesion: done
   epic-5-retrospective: optional
 
   # ========== EPICS BLOQUEADOS (dependen de Neon) ==========

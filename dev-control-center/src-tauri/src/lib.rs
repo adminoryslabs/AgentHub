@@ -4,6 +4,7 @@ pub mod commands {
     pub mod sessions;
 }
 
+pub mod logging;
 pub mod models {
     pub mod project;
 }

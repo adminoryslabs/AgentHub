@@ -3,6 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use crate::logging::log_debug;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionEntry {
@@ -43,21 +45,31 @@ fn encode_project_path(path: &str) -> String {
 
 #[tauri::command]
 pub async fn get_sessions(req: GetSessionsRequest) -> Result<Vec<SessionEntry>, String> {
+    log_debug(&format!("[sessions] get_sessions for path='{}'", req.project_path));
+
     let mut sessions = Vec::new();
 
     // Discover Claude sessions
-    if let Ok(claude) = discover_claude_sessions(&req.project_path) {
-        sessions.extend(claude);
+    match discover_claude_sessions(&req.project_path) {
+        Ok(claude) => {
+            log_debug(&format!("[sessions] claude sessions found: {}", claude.len()));
+            sessions.extend(claude);
+        }
+        Err(e) => log_debug(&format!("[sessions] claude discovery error: {}", e)),
     }
 
     // Discover Qwen sessions
-    if let Ok(qwen) = discover_qwen_sessions(&req.project_path) {
-        sessions.extend(qwen);
+    match discover_qwen_sessions(&req.project_path) {
+        Ok(qwen) => {
+            log_debug(&format!("[sessions] qwen sessions found: {}", qwen.len()));
+            sessions.extend(qwen);
+        }
+        Err(e) => log_debug(&format!("[sessions] qwen discovery error: {}", e)),
     }
 
-    // Sort by modified_at descending
     sessions.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
 
+    log_debug(&format!("[sessions] total sessions returned: {}", sessions.len()));
     Ok(sessions)
 }
 
@@ -72,9 +84,14 @@ fn discover_claude_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Str
         .join("projects")
         .join(&encoded);
 
+    log_debug(&format!("[sessions] claude dir: home='{}' encoded='{}' path='{}'", home, encoded, claude_dir.display()));
+
     if !claude_dir.exists() {
+        log_debug(&format!("[sessions] claude dir does not exist: {}", claude_dir.display()));
         return Ok(Vec::new());
     }
+
+    log_debug(&format!("[sessions] claude dir exists, scanning..."));
 
     let mut sessions = Vec::new();
 
@@ -82,22 +99,15 @@ fn discover_claude_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Str
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
 
-        // Claude stores sessions as .jsonl files
-        if !path.is_file() {
-            continue;
-        }
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-            continue;
-        }
+        if !path.is_file() { continue; }
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") { continue; }
 
         let metadata = path.metadata().map_err(|e| e.to_string())?;
         let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
         let size = metadata.len();
+        let session_id = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
 
-        let session_id = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default();
+        log_debug(&format!("[sessions] claude session: {} ({}B, {:?})", session_id, size, modified));
 
         sessions.push(SessionEntry {
             agent: "claude".to_string(),
@@ -122,9 +132,14 @@ fn discover_qwen_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Strin
         .join(&encoded)
         .join("chats");
 
+    log_debug(&format!("[sessions] qwen chats dir: home='{}' encoded='{}' path='{}'", home, encoded, chats_dir.display()));
+
     if !chats_dir.exists() {
+        log_debug(&format!("[sessions] qwen chats dir does not exist: {}", chats_dir.display()));
         return Ok(Vec::new());
     }
+
+    log_debug(&format!("[sessions] qwen chats dir exists, scanning..."));
 
     let mut sessions = Vec::new();
 
@@ -132,21 +147,15 @@ fn discover_qwen_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Strin
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
 
-        if !path.is_file() {
-            continue;
-        }
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-            continue;
-        }
+        if !path.is_file() { continue; }
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") { continue; }
 
         let metadata = path.metadata().map_err(|e| e.to_string())?;
         let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
         let size = metadata.len();
+        let session_id = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
 
-        let session_id = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default();
+        log_debug(&format!("[sessions] qwen session: {} ({}B, {:?})", session_id, size, modified));
 
         sessions.push(SessionEntry {
             agent: "qwen".to_string(),
