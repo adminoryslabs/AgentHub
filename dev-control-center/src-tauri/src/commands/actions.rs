@@ -398,8 +398,15 @@ fn launch_windows_editor(editor: &str, path: &str) -> Result<std::process::Child
         }
     }
 
-    // Try direct launch
-    Command::new(editor).arg(path).spawn()
+    // Try direct launch first
+    match Command::new(editor).arg(path).spawn() {
+        Ok(child) => Ok(child),
+        Err(_) => {
+            // Fallback: try cmd.exe /c which can handle .cmd/.bat in PATH
+            log_debug(&format!("[open_editor] direct launch failed, trying cmd.exe /c {}", editor));
+            Command::new("cmd.exe").args(["/c", editor, path]).spawn()
+        }
+    }
 }
 
 /// Launch a command in a visible terminal window.

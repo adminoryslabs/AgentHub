@@ -24,12 +24,23 @@ pub struct GetSessionsRequest {
 /// Encode a project path to the format used by Claude/Qwen.
 ///
 /// Unix:  `/home/mario/AgentHub` → `-home-mario-AgentHub`
-/// Win:   `D:/Belcorp/Projects/WS` → `D--Belcorp-Projects-WS`
+/// Win:   `D:\Belcorp\Projects\WS` → `D--Belcorp-Projects-WS`
+///
+/// The key insight: Windows drive paths like `D:\path` encode as `D--path`
+/// (the `:\` becomes `--`, remaining `\` become `-`).
 fn encode_project_path(path: &str) -> String {
-    let mut encoded = path
-        .replace('/', "-")
-        .replace('\\', "-")
-        .replace(':', "--");
+    // First handle Windows drive paths: D:\path → D--path
+    // Detect Windows drive pattern (letter followed by :\)
+    if path.len() >= 3 && path.chars().nth(1) == Some(':') && (path.chars().nth(2) == Some('\\') || path.chars().nth(2) == Some('/')) {
+        // Replace the drive colon + separator with --
+        let rest = &path[2..]; // \Belcorp\Projects or /Belcorp/Projects
+        let encoded_rest = rest.replace('\\', "-").replace('/', "-");
+        // path[0] is the drive letter, then --, then rest
+        return format!("{}--{}", &path[0..1], &encoded_rest[1..]); // skip leading \ or /
+    }
+
+    // Unix paths: /home/mario/AgentHub → -home-mario-AgentHub
+    let mut encoded = path.replace('/', "-");
 
     // Unix paths start with / → becomes leading -
     if path.starts_with('/') && !encoded.starts_with('-') {
@@ -300,6 +311,16 @@ fn is_wsl_path(path: &str) -> bool {
 }
 
 fn whoami() -> String {
+    // Try WSL username first (when running on Windows but scanning WSL filesystem)
+    if let Ok(output) = std::process::Command::new("wsl").args(["whoami"]).output() {
+        if output.status.success() {
+            let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !name.is_empty() {
+                return name;
+            }
+        }
+    }
+    // Fallback to environment variables
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "marioyahuar".to_string())
