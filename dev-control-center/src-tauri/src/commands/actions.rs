@@ -212,6 +212,9 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
         // From Windows, open in WSL: `wsl code /path`
         log_debug(&format!("[open_editor] running from Windows for WSL: wsl {}", editor));
         Command::new("wsl").arg(&editor).arg(&project.path).spawn()
+    } else if is_windows() {
+        // Windows native: check if it's a .cmd/.bat and wrap accordingly
+        launch_windows_editor(&editor, &project.path)
     } else {
         log_debug(&format!("[open_editor] native launch: {}", editor));
         Command::new(&editor).arg(&project.path).spawn()
@@ -380,6 +383,25 @@ fn update_last_opened(project_id: uuid::Uuid) -> Result<(), String> {
     crate::commands::projects::save_projects(&store)
 }
 
+/// Launch an editor on Windows, handling .cmd/.bat wrappers.
+fn launch_windows_editor(editor: &str, path: &str) -> Result<std::process::Child, std::io::Error> {
+    // Check if the editor resolves to a .cmd or .bat file
+    let full_path = resolve_command_path(editor);
+    if let Some(ref resolved) = full_path {
+        let lower = resolved.to_lowercase();
+        if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+            // Use cmd.exe /c to run the batch file
+            log_debug(&format!("[open_editor] launching via cmd.exe /c: {} at {}", editor, resolved));
+            return Command::new("cmd.exe")
+                .args(["/c", resolved, path])
+                .spawn();
+        }
+    }
+
+    // Try direct launch
+    Command::new(editor).arg(path).spawn()
+}
+
 /// Launch a command in a visible terminal window.
 fn launch_in_terminal(
     cmd: &str,
@@ -394,7 +416,6 @@ fn launch_in_terminal(
         // Running inside WSL → open Windows Terminal via wt.exe
         let full_cmd = format!("cd '{}' && {}", path, cmd);
         log_debug(&format!("[launch_terminal] WSL mode: wt.exe bash -c '{}'", full_cmd));
-        // Use bash -c (not -ic) so Ctrl+C doesn't kill the terminal
         Command::new("wt.exe")
             .arg("--title")
             .arg(&title)
@@ -411,16 +432,16 @@ fn launch_in_terminal(
         Ok(())
     } else if is_windows() && env == "wsl" {
         // Windows native, project lives in WSL
-        // Don't use --profile to avoid opening the wrong terminal profile
+        // Use bash -ic to load .bashrc and nvm for agents like claude/qwen
         let wsl_cmd = format!("cd '{}' && {}", path, cmd);
-        log_debug(&format!("[launch_terminal] Windows→WSL: wt.exe wsl bash -c '{}'", wsl_cmd));
+        log_debug(&format!("[launch_terminal] Windows→WSL: wt.exe wsl bash -ic '{}'", wsl_cmd));
         Command::new("wt.exe")
             .arg("new-tab")
             .arg("--title")
             .arg(&title)
             .arg("wsl")
             .arg("bash")
-            .arg("-c")
+            .arg("-ic")
             .arg(&wsl_cmd)
             .spawn()
             .map_err(|e| {
