@@ -137,52 +137,46 @@ fn discover_claude_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Str
 
 /// Discover Claude sessions via WSL (from Windows).
 fn discover_claude_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String> {
-    let wsl_path = format!("/home/{}/.claude/projects/{}", whoami(), encoded);
+    let username = whoami();
+    let wsl_path = format!("/home/{}/.claude/projects/{}", username, encoded);
     log_debug(&format!("[sessions] claude wsl scan: {}", wsl_path));
 
+    // Check if directory exists first
+    let dir_check = Command::new("wsl")
+        .args(["test", "-d", &wsl_path])
+        .output()
+        .map_err(|e| format!("wsl test failed: {}", e))?;
+
+    if !dir_check.status.success() {
+        log_debug(&format!("[sessions] claude wsl dir does not exist: {}", wsl_path));
+        return Ok(Vec::new());
+    }
+
+    // Simple ls -1 to get just filenames
     let output = Command::new("wsl")
-        .args(["ls", "-1", "--time-style=full-iso", &wsl_path])
+        .args(["ls", "-1", &wsl_path])
         .output()
         .map_err(|e| format!("wsl ls failed: {}", e))?;
 
     if !output.status.success() {
-        log_debug(&format!("[sessions] claude wsl dir does not exist: {}", wsl_path));
+        log_debug(&format!("[sessions] claude wsl ls failed"));
         return Ok(Vec::new());
     }
 
     let mut sessions = Vec::new();
 
     for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 6 { continue; }
-
-        let filename = parts.last().unwrap();
+        let filename = line.trim();
         if !filename.ends_with(".jsonl") { continue; }
 
-        // Parse date and size from ls output
-        // Format: permissions links owner group size date time filename
-        let size_idx = 4;
-        let date_idx = 5;
-        let time_idx = 6;
-
-        let size: u64 = parts.get(size_idx).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let date_str = format!("{} {}", parts.get(date_idx).unwrap_or(&""), parts.get(time_idx).unwrap_or(&""));
         let session_id = filename.trim_end_matches(".jsonl").to_string();
-
-        // Try to parse the date, fallback to epoch
-        let modified = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S")
-            .ok()
-            .map(|dt| dt.and_utc())
-            .unwrap_or(chrono::Utc::now())
-            .into();
-
-        log_debug(&format!("[sessions] claude wsl session: {} ({}B)", session_id, size));
+        log_debug(&format!("[sessions] claude wsl session: {}", session_id));
 
         sessions.push(SessionEntry {
             agent: "claude".to_string(),
             session_id,
-            modified_at: format_system_time(modified),
-            size_bytes: size,
+            modified_at: chrono::Utc::now().to_rfc3339(),
+            size_bytes: 0,
         });
     }
 
@@ -247,49 +241,46 @@ fn discover_qwen_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Strin
 
 /// Discover Qwen sessions via WSL (from Windows).
 fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String> {
-    let wsl_path = format!("/home/{}/.qwen/projects/{}/chats", whoami(), encoded);
+    let username = whoami();
+    let wsl_path = format!("/home/{}/.qwen/projects/{}/chats", username, encoded);
     log_debug(&format!("[sessions] qwen wsl scan: {}", wsl_path));
 
+    // Check if directory exists first
+    let dir_check = Command::new("wsl")
+        .args(["test", "-d", &wsl_path])
+        .output()
+        .map_err(|e| format!("wsl test failed: {}", e))?;
+
+    if !dir_check.status.success() {
+        log_debug(&format!("[sessions] qwen wsl chats dir does not exist: {}", wsl_path));
+        return Ok(Vec::new());
+    }
+
+    // Simple ls -1 to get just filenames
     let output = Command::new("wsl")
-        .args(["ls", "-1", "--time-style=full-iso", &wsl_path])
+        .args(["ls", "-1", &wsl_path])
         .output()
         .map_err(|e| format!("wsl ls failed: {}", e))?;
 
     if !output.status.success() {
-        log_debug(&format!("[sessions] qwen wsl chats dir does not exist: {}", wsl_path));
+        log_debug(&format!("[sessions] qwen wsl ls failed"));
         return Ok(Vec::new());
     }
 
     let mut sessions = Vec::new();
 
     for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 6 { continue; }
-
-        let filename = parts.last().unwrap();
+        let filename = line.trim();
         if !filename.ends_with(".jsonl") { continue; }
 
-        let size_idx = 4;
-        let date_idx = 5;
-        let time_idx = 6;
-
-        let size: u64 = parts.get(size_idx).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let date_str = format!("{} {}", parts.get(date_idx).unwrap_or(&""), parts.get(time_idx).unwrap_or(&""));
         let session_id = filename.trim_end_matches(".jsonl").to_string();
-
-        let modified = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S")
-            .ok()
-            .map(|dt| dt.and_utc())
-            .unwrap_or(chrono::Utc::now())
-            .into();
-
-        log_debug(&format!("[sessions] qwen wsl session: {} ({}B)", session_id, size));
+        log_debug(&format!("[sessions] qwen wsl session: {}", session_id));
 
         sessions.push(SessionEntry {
             agent: "qwen".to_string(),
             session_id,
-            modified_at: format_system_time(modified),
-            size_bytes: size,
+            modified_at: chrono::Utc::now().to_rfc3339(),
+            size_bytes: 0,
         });
     }
 

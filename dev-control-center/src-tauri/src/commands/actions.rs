@@ -42,6 +42,7 @@ fn is_windows() -> bool {
 fn resolve_command(name: &str) -> String {
     match name {
         "vscode" => "code".to_string(),
+        "qwencode" => "qwen".to_string(),
         _ => name.to_string(),
     }
 }
@@ -261,15 +262,17 @@ pub async fn launch_agent(req: LaunchAgentRequest) -> Result<String, String> {
 
     log_debug(&format!("[launch_agent] project={} env={} path={}", project.name, project.environment, project.path));
 
-    let agent = &req.agent;
+    // Resolve agent alias (qwencode -> qwen)
+    let agent = resolve_command(&req.agent);
+    log_debug(&format!("[launch_agent] resolved '{}' -> '{}'", req.agent, agent));
 
     // Validate agent exists in the right environment (interactive shell for WSL to load nvm)
     let agent_available = if is_windows() && project.environment == "wsl" {
-        let found = which_wsl(agent);
+        let found = which_wsl(&agent);
         log_debug(&format!("[launch_agent] agent '{}' in WSL (interactive): {}", agent, found));
         found
     } else {
-        let found = which(agent);
+        let found = which(&agent);
         log_debug(&format!("[launch_agent] agent '{}' in {}: {}", agent, platform, found));
         found
     };
@@ -291,7 +294,7 @@ pub async fn launch_agent(req: LaunchAgentRequest) -> Result<String, String> {
 
     // Launch agent in a visible terminal
     log_debug(&format!("[launch_agent] launching '{}' in terminal for path='{}'", agent, project.path));
-    launch_in_terminal(agent, &project.path, &project.environment, &project.name)?;
+    launch_in_terminal(&agent, &project.path, &project.environment, &project.name)?;
 
     // Update lastOpenedAt
     let _ = update_last_opened(project_id);
