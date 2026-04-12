@@ -28,19 +28,42 @@ fn is_windows() -> bool {
     cfg!(target_os = "windows")
 }
 
+/// Check if a command exists in PATH.
+/// On Windows, also checks .cmd variants and common install locations.
 fn which(cmd: &str) -> bool {
     if is_windows() {
-        // On Windows, check both the command and .cmd variant (e.g., code vs code.cmd)
-        Command::new("where")
+        // Check the command directly
+        if Command::new("where")
             .arg(cmd)
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
-            || Command::new("where")
-                .arg(format!("{}.cmd", cmd))
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
+        {
+            return true;
+        }
+        // Check .cmd variant (e.g., code.cmd for VS Code)
+        if Command::new("where")
+            .arg(format!("{}.cmd", cmd))
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        // Check .exe variant
+        if Command::new("where")
+            .arg(format!("{}.exe", cmd))
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        // Fallback: check common install locations
+        if command_exists_at(&resolve_command_path(cmd)) {
+            return true;
+        }
+        false
     } else {
         Command::new("which")
             .arg(cmd)
@@ -48,6 +71,54 @@ fn which(cmd: &str) -> bool {
             .map(|o| o.status.success())
             .unwrap_or(false)
     }
+}
+
+/// Check if a command exists inside WSL (from Windows).
+fn which_wsl(cmd: &str) -> bool {
+    Command::new("wsl")
+        .args(["which", cmd])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Resolve common install paths for commands on Windows
+fn resolve_command_path(cmd: &str) -> Option<String> {
+    if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+        match cmd {
+            "code" => {
+                let path = format!(
+                    "{}\\Programs\\Microsoft VS Code\\bin\\code.cmd",
+                    localappdata
+                );
+                if std::path::Path::new(&path).exists() {
+                    return Some(path);
+                }
+                // Also check Program Files
+                if let Ok(programfiles) = std::env::var("ProgramFiles") {
+                    let path = format!(
+                        "{}\\Microsoft VS Code\\bin\\code.cmd",
+                        programfiles
+                    );
+                    if std::path::Path::new(&path).exists() {
+                        return Some(path);
+                    }
+                }
+            }
+            "cursor" => {
+                let path = format!("{}\\Programs\\cursor\\cursor.exe", localappdata);
+                if std::path::Path::new(&path).exists() {
+                    return Some(path);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn command_exists_at(path: &Option<String>) -> bool {
+    path.as_ref().map(|p| std::path::Path::new(p).exists()).unwrap_or(false)
 }
 
 /// Check if a path exists, handling cross-environment cases
@@ -68,14 +139,6 @@ fn path_exists(path: &str, env: &str) -> bool {
 // Open Editor (VSCode / Cursor)
 // ============================================================================
 
-fn get_editor_binary(editor: &str) -> String {
-    match editor {
-        "vscode" => "code".to_string(),
-        "cursor" => "cursor".to_string(),
-        _ => editor.to_string(),
-    }
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenEditorRequest {
@@ -95,40 +158,40 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
         .find(|p| p.id == project_id)
         .ok_or_else(|| format!("Proyecto no encontrado: {}", req.project_id))?;
 
-    let editor = get_editor_binary(&req.editor);
+    let editor = &req.editor;
 
-    // Validate editor exists in PATH
-    if !which(&editor) {
-        // Special case: VS Code on Windows might be code.cmd
-        if is_windows() && req.editor == "vscode" && !which("code.cmd") {
-            return Err("VS Code no encontrado en PATH. Asegurate de que 'code' esté en las variables de entorno (Install VS Code with 'Add to PATH' option).".to_string());
-        }
-        return Err(format!(
-            "{} no encontrado en PATH. Instalalo primero.",
-            editor
-        ));
+    // Validate editor exists
+    let editor_available = if is_windows() && project.environment == "wsl" {
+        // Project is in WSL — editor validation doesn't matter as much
+        // since `wsl code` will work if code is installed in WSL
+        true // trust it; wsl will error if not found
+    } else {
+        which(editor) || (is_windows() && editor == "vscode" && resolve_command_path("code").is_some())
+    };
+
+    if !editor_available {
+        let hint = match editor.as_str() {
+            "vscode" if is_windows() => "VS Code no encontrado en PATH. Asegurate de instalar VS Code con 'Add to PATH' o reinstálalo marcando esa opción.",
+            "cursor" if is_windows() => "Cursor no encontrado en PATH.",
+            _ => return Err(format!("{} no encontrado en PATH. Instalalo primero.", editor)),
+        };
+        return Err(hint.to_string());
     }
 
-    // Validate project path exists (handles cross-environment)
+    // Validate project path exists
     if !path_exists(&project.path, &project.environment) {
         return Err(format!("Ruta no encontrada: {}", project.path));
     }
 
     // Launch editor
     let result = if is_wsl() {
-        // Already in WSL - direct launch (VS Code Remote handles the rest)
-        Command::new(&editor).arg(&project.path).spawn()
+        Command::new(editor).arg(&project.path).spawn()
     } else if is_windows() && project.environment == "wsl" {
-        // Windows native, project lives in WSL
-        // `wsl code` runs VS Code inside WSL, which triggers VS Code Remote
-        Command::new("wsl")
-            .arg(&editor)
-            .arg(&project.path)
-            .spawn()
+        Command::new("wsl").arg(editor).arg(&project.path).spawn()
     } else if is_macos() {
-        Command::new(&editor).arg(&project.path).spawn()
+        Command::new(editor).arg(&project.path).spawn()
     } else {
-        Command::new(&editor).arg(&project.path).spawn()
+        Command::new(editor).arg(&project.path).spawn()
     };
 
     result.map_err(|e| format!("No se pudo abrir {}: {}", editor, e))?;
@@ -142,15 +205,6 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
 // ============================================================================
 // Launch Agent (Claude Code / OpenCode / QwenCode)
 // ============================================================================
-
-fn get_agent_binary(agent: &str) -> String {
-    match agent {
-        "claude" => "claude".to_string(),
-        "opencode" => "opencode".to_string(),
-        "qwen" => "qwen".to_string(),
-        _ => agent.to_string(),
-    }
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -171,28 +225,95 @@ pub async fn launch_agent(req: LaunchAgentRequest) -> Result<String, String> {
         .find(|p| p.id == project_id)
         .ok_or_else(|| format!("Proyecto no encontrado: {}", req.project_id))?;
 
-    let agent = get_agent_binary(&req.agent);
+    let agent = &req.agent;
 
-    // Validate agent exists in PATH
-    if !which(&agent) {
-        return Err(format!(
-            "{} no encontrado en PATH. Instalalo primero.",
-            agent
-        ));
+    // Validate agent exists — check in the right environment
+    let agent_available = if is_windows() && project.environment == "wsl" {
+        // Project is in WSL — agent must exist in WSL, not Windows
+        which_wsl(agent)
+    } else {
+        which(agent)
+    };
+
+    if !agent_available {
+        let hint = if is_windows() && project.environment == "wsl" {
+            format!("{} no encontrado en WSL. Instalalo dentro de WSL primero.", agent)
+        } else {
+            format!("{} no encontrado en PATH. Instalalo primero.", agent)
+        };
+        return Err(hint);
     }
 
-    // Validate project path exists (handles cross-environment)
+    // Validate project path exists
     if !path_exists(&project.path, &project.environment) {
         return Err(format!("Ruta no encontrada: {}", project.path));
     }
 
     // Launch agent in a visible terminal
-    launch_in_terminal(&agent, &project.path, &project.environment, &project.name)?;
+    launch_in_terminal(agent, &project.path, &project.environment, &project.name)?;
 
     // Update lastOpenedAt
     update_last_opened(project_id)?;
 
     Ok(format!("{} launched for {}", req.agent, project.name))
+}
+
+/// Resume a specific agent session by ID
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumeAgentSessionRequest {
+    pub project_id: String,
+    pub agent: String,
+    pub session_id: String,
+}
+
+#[tauri::command]
+pub async fn resume_agent_session(req: ResumeAgentSessionRequest) -> Result<String, String> {
+    let store = load_projects()?;
+    let project_id = uuid::Uuid::parse_str(&req.project_id)
+        .map_err(|_| format!("ID inválido: {}", req.project_id))?;
+
+    let project = store
+        .projects
+        .iter()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Proyecto no encontrado: {}", req.project_id))?;
+
+    let agent = &req.agent;
+    let session_id = &req.session_id;
+
+    // Validate agent exists in the right environment
+    let agent_available = if is_windows() && project.environment == "wsl" {
+        which_wsl(agent)
+    } else {
+        which(agent)
+    };
+
+    if !agent_available {
+        let hint = if is_windows() && project.environment == "wsl" {
+            format!("{} no encontrado en WSL. Instalalo dentro de WSL primero.", agent)
+        } else {
+            format!("{} no encontrado en PATH. Instalalo primero.", agent)
+        };
+        return Err(hint);
+    }
+
+    // Build resume command
+    let resume_flag = if agent == "claude" { "-r" } else { "--resume" };
+    let resume_cmd = format!("{} {} {}", agent, resume_flag, session_id);
+
+    // Validate project path
+    if !path_exists(&project.path, &project.environment) {
+        return Err(format!("Ruta no encontrada: {}", project.path));
+    }
+
+    // Launch in terminal
+    launch_in_terminal(&resume_cmd, &project.path, &project.environment, &project.name)?;
+
+    // Update lastOpenedAt
+    update_last_opened(project_id)?;
+
+    Ok(format!("{} session {} resumed for {}", req.agent, &session_id[..8], project.name))
 }
 
 /// Update the lastOpenedAt timestamp for a project
@@ -209,7 +330,6 @@ fn update_last_opened(project_id: uuid::Uuid) -> Result<(), String> {
 }
 
 /// Launch an agent command in a visible terminal window.
-/// Handles WSL, Windows native (with WSL projects), Mac, and Linux native.
 fn launch_in_terminal(
     agent: &str,
     path: &str,
@@ -238,7 +358,7 @@ fn launch_in_terminal(
         Ok(())
     } else if is_windows() && env == "wsl" {
         // Windows native, project lives in WSL
-        // Launch agent inside WSL via wt.exe + wsl profile
+        // Launch agent inside WSL via wt.exe + wsl
         let wsl_cmd = format!("cd '{}' && exec {}", path, agent);
         Command::new("wt.exe")
             .arg("new-tab")
@@ -253,16 +373,15 @@ fn launch_in_terminal(
             .spawn()
             .map_err(|e| {
                 format!(
-                    "wt.exe failed: {}. Asegurate de tener Windows Terminal instalado y un perfil 'Ubuntu' configurado.",
+                    "wt.exe failed: {}. Asegurate de tener Windows Terminal instalado con un perfil 'Ubuntu'.",
                     e
                 )
             })?;
         Ok(())
     } else if is_windows() {
         // Windows native, project also on Windows
-        // Use Windows Terminal to open a persistent shell
+        // Use /k to keep terminal open after command
         let win_path = path.replace('/', "\\");
-        let cmd = format!("cd /d {} && {}", win_path, agent);
         Command::new("wt.exe")
             .arg("new-tab")
             .arg("--title")
@@ -271,12 +390,11 @@ fn launch_in_terminal(
             .arg(&win_path)
             .arg("cmd.exe")
             .arg("/k")
-            .arg(&cmd)
+            .arg(agent)
             .spawn()
             .map_err(|e| format!("wt.exe failed: {}", e))?;
         Ok(())
     } else if is_macos() {
-        // Mac → use osascript to open Terminal.app
         let script = format!(
             "tell application \"Terminal\" to do script \"cd '{}' && exec {}\"",
             path, agent
@@ -288,7 +406,7 @@ fn launch_in_terminal(
             .map_err(|e| format!("osascript failed: {}", e))?;
         Ok(())
     } else {
-        // Linux native → try common terminals
+        // Linux native
         let cmd = format!("cd '{}' && exec {}", path, agent);
         for terminal in &["gnome-terminal", "x-terminal-emulator", "konsole", "xterm"] {
             if which(terminal) {

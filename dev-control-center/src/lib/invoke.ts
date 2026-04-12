@@ -54,3 +54,24 @@ export async function openEditor(projectId: string, editor: string): Promise<str
 export async function launchAgent(projectId: string, agent: string): Promise<string> {
   return invoke<string>('launch_agent', { req: { projectId, agent } })
 }
+
+export type SessionEntry = {
+  agent: string
+  sessionId: string
+  modifiedAt: string
+  sizeBytes: number
+}
+
+export async function getSessions(projectPath: string): Promise<SessionEntry[]> {
+  return invoke<SessionEntry[]>('get_sessions', { req: { projectPath } })
+}
+
+export async function resumeAgentSession(
+  projectId: string,
+  agent: string,
+  sessionId: string,
+): Promise<string> {
+  return invoke<string>('resume_agent_session', {
+    req: { projectId, agent, sessionId },
+  })
+}

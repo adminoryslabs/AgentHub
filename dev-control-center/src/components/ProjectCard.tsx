@@ -1,5 +1,6 @@
 import { type Project } from '../lib/invoke'
 import { openEditor, launchAgent } from '../lib/invoke'
+import { SessionHistory } from './SessionHistory'
 
 interface ProjectCardProps {
   project: Project
@@ -85,6 +86,9 @@ export function ProjectCard({ project, onEdit, onDelete, onOpenEditor, onLaunchA
           </button>
         </div>
       </div>
+
+      {/* Session history */}
+      <SessionHistory projectPath={project.path} projectId={project.id} />
     </div>
   )
 }

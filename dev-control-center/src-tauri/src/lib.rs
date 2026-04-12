@@ -1,6 +1,7 @@
 pub mod commands {
     pub mod projects;
     pub mod actions;
+    pub mod sessions;
 }
 
 pub mod models {
@@ -27,6 +28,8 @@ pub fn run() {
             commands::projects::delete_project,
             commands::actions::open_editor,
             commands::actions::launch_agent,
+            commands::actions::resume_agent_session,
+            commands::sessions::get_sessions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

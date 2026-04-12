@@ -448,48 +448,61 @@ So that I can find a specific project quickly when I have many.
 
 ## Epic 5: Historial de Sesiones
 
-**Objetivo:** El usuario puede ver y reabrir sesiones anteriores de agentes por proyecto.
+**Objetivo:** El usuario puede ver y reabrir sesiones existentes de los agentes (Claude, Qwen, OpenCode) que ya están guardadas en el directorio del proyecto.
 
-### Story 5.1: Persistir log de sesiones
+> **Nota:** Los agentes como Claude Code y QwenCode guardan sus propias sesiones de conversación en el directorio del proyecto (ej: `.claude/`, `.qwen/`). Este epic lee esas sesiones existentes, no crea un log propio.
+
+### Story 5.1: Detectar sesiones de agentes en el directorio del proyecto
 
 As a user,
-I want each agent session to be logged locally,
-So that I have a history of my work sessions.
+I want the app to discover existing agent sessions in my project directory,
+So that I can see my conversation history without manual configuration.
 
 **Acceptance Criteria:**
 
-**Given** un usuario abre un agente (Claude/OpenCode/Qwen) desde un proyecto
-**When** el agente se lanza exitosamente
-**Then** se guarda un registro en `~/.dev-control-center/sessions.json` con: `{ projectId, agent, launchedAt, status: "opened" }`
-**And** el archivo se appendea (no sobrescribe)
+**Given** un proyecto con sesiones de Claude Code en `.claude/PROJECT_CLAUDE.md` o `.claude/CLAUDE.md`
+**When** el comando `get_sessions` se ejecuta con `{ projectId }`
+**Then** retorna una lista de sesiones detectadas con: `{ agent, sessionName, modifiedAt, size }`
 
-### Story 5.2: Mostrar lista de sesiones en ProjectCard
+**Given** un proyecto con sesiones de QwenCode en `.qwen/` o directorio similar
+**When** el comando `get_sessions` se ejecuta
+**Then** retorna las sesiones de QwenCode detectadas
+
+**Given** un proyecto sin sesiones de ningún agente
+**When** el comando `get_sessions` se ejecuta
+**Then** retorna una lista vacía `[]` sin error
+
+### Story 5.2: Mostrar lista de sesiones expandible en ProjectCard
 
 As a user,
-I want to see the session history for each project,
-So that I can understand my work patterns.
+I want to see agent sessions grouped by agent in an expandable section of each project card,
+So that I can understand my work patterns across different agents.
 
 **Acceptance Criteria:**
 
-**Given** un proyecto con sesiones previas en `sessions.json`
+**Given** un proyecto con sesiones detectadas
 **When** el usuario expande la sección "Sessions" en el ProjectCard
-**Then** muestra una lista cronológica con: agente, fecha/hora relativa ("hace 2 horas"), estado
-**And** las sesiones se agrupan por día ("Today", "Yesterday", "April 8")
-**And** si no hay sesiones muestra "No sessions yet"
+**Then** muestra las sesiones agrupadas por agente (Claude, Qwen, OpenCode)
+**And** cada sesión muestra: nombre, fecha relativa ("hace 2 horas"), tamaño
+**And** las sesiones se ordenan por fecha modificada (más reciente primero)
+**And** si no hay sesiones muestra "No agent sessions found"
 
-### Story 5.3: Reabrir sesión
+### Story 5.3: Reabrir sesión de agente
 
 As a user,
-I want to reopen a previous agent session,
-So that I can continue where I left off.
+I want to reopen a specific agent session from the history,
+So that I can continue working in that conversation context.
 
 **Acceptance Criteria:**
 
-**Given** un proyecto con sesiones previas
-**When** el usuario hace clic en una sesión de la lista
-**Then** se abre el mismo agente en el mismo directorio del proyecto (vía `launch_in_terminal`)
-**And** se registra una nueva entrada en `sessions.json`
-**And** se muestra un toast de éxito
+**Given** un proyecto con sesiones de Claude Code
+**When** el usuario hace clic en una sesión de Claude
+**Then** se abre Claude Code en el directorio del proyecto
+**And** (si el agente soporta resume) se pasa el nombre de sesión para reabrir esa conversación
+
+**Given** un proyecto con sesiones de QwenCode
+**When** el usuario hace clic en una sesión de QwenCode
+**Then** se abre QwenCode en el directorio del proyecto
 
 ---
 
