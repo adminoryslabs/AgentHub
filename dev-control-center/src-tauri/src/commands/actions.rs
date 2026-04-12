@@ -38,7 +38,15 @@ fn is_windows() -> bool {
     cfg!(target_os = "windows")
 }
 
-/// Check if a command exists in PATH.
+/// Map editor/agent alias to actual binary name.
+fn resolve_command(name: &str) -> String {
+    match name {
+        "vscode" => "code".to_string(),
+        _ => name.to_string(),
+    }
+}
+
+/// Check if a command exists in PATH (Windows).
 fn which(cmd: &str) -> bool {
     if is_windows() {
         let variants = [
@@ -55,7 +63,6 @@ fn which(cmd: &str) -> bool {
             log_debug(&format!("[which] {} -> {} ({})", cmd, found, v));
             if found { return true; }
         }
-        // Check common install locations
         if let Some(path) = resolve_command_path(cmd) {
             log_debug(&format!("[which] {} -> found at {}", cmd, path));
             return true;
@@ -73,15 +80,17 @@ fn which(cmd: &str) -> bool {
     }
 }
 
-/// Check if a command exists inside WSL (from Windows).
+/// Check if a command exists inside WSL using an INTERACTIVE shell.
+/// This is critical because nvm and other PATH customizations live in .bashrc.
 fn which_wsl(cmd: &str) -> bool {
+    // Use bash -ic to load .bashrc and nvm
+    let which_cmd = format!("which {}", cmd);
     let output = Command::new("wsl")
-        .args(["which", cmd])
+        .args(["bash", "-ic", &which_cmd])
         .output();
     let found = output.as_ref().map(|o| o.status.success()).unwrap_or(false);
-    let stderr = output.as_ref().map(|o| String::from_utf8_lossy(&o.stderr).to_string()).unwrap_or_default();
-    let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
-    log_debug(&format!("[which_wsl] {} -> {} (stdout={}, stderr={})", cmd, found, stdout.trim(), stderr.trim()));
+    let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+    log_debug(&format!("[which_wsl] {} -> {} (stdout={})", cmd, found, stdout));
     found
 }
 
@@ -160,14 +169,17 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
 
     log_debug(&format!("[open_editor] project={} env={} path={}", project.name, project.environment, project.path));
 
-    let editor = &req.editor;
+    // Map editor alias to actual binary (vscode -> code)
+    let editor = resolve_command(&req.editor);
+    log_debug(&format!("[open_editor] resolved '{}' -> '{}'", req.editor, editor));
 
     // Validate editor exists
     let editor_available = if is_windows() && project.environment == "wsl" {
-        log_debug(&format!("[open_editor] WSL project - skipping editor validation on Windows side"));
+        // WSL project: trust that code/cursor exists in WSL
+        log_debug(&format!("[open_editor] WSL project - trusting '{}' exists in WSL", editor));
         true
     } else {
-        let found = which(editor) || resolve_command_path(editor).is_some();
+        let found = which(&editor) || resolve_command_path(&editor).is_some();
         log_debug(&format!("[open_editor] editor '{}' available in PATH: {}", editor, found));
         found
     };
@@ -175,7 +187,7 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
     if !editor_available {
         let hint = if is_windows() {
             match editor.as_str() {
-                "vscode" => "VS Code no encontrado. Asegurate de instalar con 'Add to PATH' o reinstala marcando esa opcion.",
+                "code" => "VS Code no encontrado. Asegurate de instalar con 'Add to PATH' o reinstala marcando esa opcion.",
                 "cursor" => "Cursor no encontrado en PATH.",
                 _ => return Err(format!("{} no encontrado en PATH. Instalalo primero.", editor)),
             }
@@ -195,13 +207,14 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
 
     let result = if is_wsl() {
         log_debug("[open_editor] running from WSL: direct launch");
-        Command::new(editor).arg(&project.path).spawn()
+        Command::new(&editor).arg(&project.path).spawn()
     } else if is_windows() && project.environment == "wsl" {
+        // From Windows, open in WSL: `wsl code /path`
         log_debug(&format!("[open_editor] running from Windows for WSL: wsl {}", editor));
-        Command::new("wsl").arg(editor).arg(&project.path).spawn()
+        Command::new("wsl").arg(&editor).arg(&project.path).spawn()
     } else {
         log_debug(&format!("[open_editor] native launch: {}", editor));
-        Command::new(editor).arg(&project.path).spawn()
+        Command::new(&editor).arg(&project.path).spawn()
     };
 
     match &result {
@@ -247,10 +260,10 @@ pub async fn launch_agent(req: LaunchAgentRequest) -> Result<String, String> {
 
     let agent = &req.agent;
 
-    // Validate agent exists in the right environment
+    // Validate agent exists in the right environment (interactive shell for WSL to load nvm)
     let agent_available = if is_windows() && project.environment == "wsl" {
         let found = which_wsl(agent);
-        log_debug(&format!("[launch_agent] agent '{}' in WSL: {}", agent, found));
+        log_debug(&format!("[launch_agent] agent '{}' in WSL (interactive): {}", agent, found));
         found
     } else {
         let found = which(agent);
@@ -379,14 +392,15 @@ fn launch_in_terminal(
 
     if is_wsl() {
         // Running inside WSL → open Windows Terminal via wt.exe
-        let full_cmd = format!("cd '{}' && exec {}", path, cmd);
-        log_debug(&format!("[launch_terminal] WSL mode: wt.exe bash -ic '{}'", full_cmd));
+        let full_cmd = format!("cd '{}' && {}", path, cmd);
+        log_debug(&format!("[launch_terminal] WSL mode: wt.exe bash -c '{}'", full_cmd));
+        // Use bash -c (not -ic) so Ctrl+C doesn't kill the terminal
         Command::new("wt.exe")
             .arg("--title")
             .arg(&title)
             .arg("--")
             .arg("bash")
-            .arg("-ic")
+            .arg("-c")
             .arg(&full_cmd)
             .spawn()
             .map_err(|e| {
@@ -397,21 +411,20 @@ fn launch_in_terminal(
         Ok(())
     } else if is_windows() && env == "wsl" {
         // Windows native, project lives in WSL
-        let wsl_cmd = format!("cd '{}' && exec {}", path, cmd);
-        log_debug(&format!("[launch_terminal] Windows→WSL: wt.exe --profile Ubuntu wsl bash -ic '{}'", wsl_cmd));
+        // Don't use --profile to avoid opening the wrong terminal profile
+        let wsl_cmd = format!("cd '{}' && {}", path, cmd);
+        log_debug(&format!("[launch_terminal] Windows→WSL: wt.exe wsl bash -c '{}'", wsl_cmd));
         Command::new("wt.exe")
             .arg("new-tab")
             .arg("--title")
             .arg(&title)
-            .arg("--profile")
-            .arg("Ubuntu")
             .arg("wsl")
             .arg("bash")
-            .arg("-ic")
+            .arg("-c")
             .arg(&wsl_cmd)
             .spawn()
             .map_err(|e| {
-                let msg = format!("wt.exe failed: {}. Asegurate de tener Windows Terminal con perfil 'Ubuntu'. Error: {}", e, e);
+                let msg = format!("wt.exe failed: {}. Asegurate de tener Windows Terminal.", e);
                 log_debug(&format!("[launch_terminal] FAILED: {}", msg));
                 msg
             })?;
@@ -420,6 +433,7 @@ fn launch_in_terminal(
         // Windows native, project also on Windows
         let win_path = path.replace('/', "\\");
         log_debug(&format!("[launch_terminal] Windows native: cmd.exe /k '{}' in '{}'", cmd, win_path));
+        // cmd.exe /k keeps the terminal open after the command exits
         Command::new("wt.exe")
             .arg("new-tab")
             .arg("--title")
@@ -449,14 +463,14 @@ fn launch_in_terminal(
         Ok(())
     } else {
         // Linux native
-        let full_cmd = format!("cd '{}' && exec {}", path, cmd);
+        let full_cmd = format!("cd '{}' && {}", path, cmd);
         for terminal in &["gnome-terminal", "x-terminal-emulator", "konsole", "xterm"] {
             if which(terminal) {
                 return match *terminal {
                     "gnome-terminal" => Command::new("gnome-terminal")
                         .arg("--")
                         .arg("bash")
-                        .arg("-ic")
+                        .arg("-c")
                         .arg(&full_cmd)
                         .spawn()
                         .map(|_| ())
@@ -464,14 +478,14 @@ fn launch_in_terminal(
                     "konsole" => Command::new("konsole")
                         .arg("-e")
                         .arg("bash")
-                        .arg("-ic")
+                        .arg("-c")
                         .arg(&full_cmd)
                         .spawn()
                         .map(|_| ())
                         .map_err(|e| format!("{} failed: {}", terminal, e)),
                     _ => Command::new(terminal)
                         .arg("-e")
-                        .arg(format!("bash -ic '{}'", full_cmd))
+                        .arg(format!("bash -c '{}'", full_cmd))
                         .spawn()
                         .map(|_| ())
                         .map_err(|e| format!("{} failed: {}", terminal, e)),

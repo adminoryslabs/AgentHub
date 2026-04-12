@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::SystemTime;
 
 use crate::logging::log_debug;
@@ -28,16 +29,11 @@ fn encode_project_path(path: &str) -> String {
     let mut encoded = path
         .replace('/', "-")
         .replace('\\', "-")
-        .replace(':', "-");
+        .replace(':', "--");
 
-    // Unix paths start with / → becomes leading -, but we want a single leading -
+    // Unix paths start with / → becomes leading -
     if path.starts_with('/') && !encoded.starts_with('-') {
         encoded.insert(0, '-');
-    }
-
-    // Collapse multiple consecutive dashes to single dash
-    while encoded.contains("--") {
-        encoded = encoded.replace("--", "-");
     }
 
     encoded
@@ -73,12 +69,20 @@ pub async fn get_sessions(req: GetSessionsRequest) -> Result<Vec<SessionEntry>, 
     Ok(sessions)
 }
 
+/// Discover Claude sessions. If running on Windows with a WSL project path,
+/// scan via `wsl ls` in the WSL filesystem.
 fn discover_claude_sessions(project_path: &str) -> Result<Vec<SessionEntry>, String> {
+    let encoded = encode_project_path(project_path);
+
+    // If on Windows and project is WSL, scan via wsl
+    if is_windows() && is_wsl_path(project_path) {
+        return discover_claude_sessions_wsl(&encoded);
+    }
+
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
 
-    let encoded = encode_project_path(project_path);
     let claude_dir = PathBuf::from(&home)
         .join(".claude")
         .join("projects")
@@ -120,12 +124,74 @@ fn discover_claude_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Str
     Ok(sessions)
 }
 
+/// Discover Claude sessions via WSL (from Windows).
+fn discover_claude_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String> {
+    let wsl_path = format!("/home/{}/.claude/projects/{}", whoami(), encoded);
+    log_debug(&format!("[sessions] claude wsl scan: {}", wsl_path));
+
+    let output = Command::new("wsl")
+        .args(["ls", "-1", "--time-style=full-iso", &wsl_path])
+        .output()
+        .map_err(|e| format!("wsl ls failed: {}", e))?;
+
+    if !output.status.success() {
+        log_debug(&format!("[sessions] claude wsl dir does not exist: {}", wsl_path));
+        return Ok(Vec::new());
+    }
+
+    let mut sessions = Vec::new();
+
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 6 { continue; }
+
+        let filename = parts.last().unwrap();
+        if !filename.ends_with(".jsonl") { continue; }
+
+        // Parse date and size from ls output
+        // Format: permissions links owner group size date time filename
+        let size_idx = 4;
+        let date_idx = 5;
+        let time_idx = 6;
+
+        let size: u64 = parts.get(size_idx).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let date_str = format!("{} {}", parts.get(date_idx).unwrap_or(&""), parts.get(time_idx).unwrap_or(&""));
+        let session_id = filename.trim_end_matches(".jsonl").to_string();
+
+        // Try to parse the date, fallback to epoch
+        let modified = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S")
+            .ok()
+            .map(|dt| dt.and_utc())
+            .unwrap_or(chrono::Utc::now())
+            .into();
+
+        log_debug(&format!("[sessions] claude wsl session: {} ({}B)", session_id, size));
+
+        sessions.push(SessionEntry {
+            agent: "claude".to_string(),
+            session_id,
+            modified_at: format_system_time(modified),
+            size_bytes: size,
+        });
+    }
+
+    Ok(sessions)
+}
+
+/// Discover Qwen sessions. If running on Windows with a WSL project path,
+/// scan via `wsl ls` in the WSL filesystem.
 fn discover_qwen_sessions(project_path: &str) -> Result<Vec<SessionEntry>, String> {
+    let encoded = encode_project_path(project_path);
+
+    // If on Windows and project is WSL, scan via wsl
+    if is_windows() && is_wsl_path(project_path) {
+        return discover_qwen_sessions_wsl(&encoded);
+    }
+
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
 
-    let encoded = encode_project_path(project_path);
     let chats_dir = PathBuf::from(&home)
         .join(".qwen")
         .join("projects")
@@ -168,8 +234,73 @@ fn discover_qwen_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Strin
     Ok(sessions)
 }
 
+/// Discover Qwen sessions via WSL (from Windows).
+fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String> {
+    let wsl_path = format!("/home/{}/.qwen/projects/{}/chats", whoami(), encoded);
+    log_debug(&format!("[sessions] qwen wsl scan: {}", wsl_path));
+
+    let output = Command::new("wsl")
+        .args(["ls", "-1", "--time-style=full-iso", &wsl_path])
+        .output()
+        .map_err(|e| format!("wsl ls failed: {}", e))?;
+
+    if !output.status.success() {
+        log_debug(&format!("[sessions] qwen wsl chats dir does not exist: {}", wsl_path));
+        return Ok(Vec::new());
+    }
+
+    let mut sessions = Vec::new();
+
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 6 { continue; }
+
+        let filename = parts.last().unwrap();
+        if !filename.ends_with(".jsonl") { continue; }
+
+        let size_idx = 4;
+        let date_idx = 5;
+        let time_idx = 6;
+
+        let size: u64 = parts.get(size_idx).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let date_str = format!("{} {}", parts.get(date_idx).unwrap_or(&""), parts.get(time_idx).unwrap_or(&""));
+        let session_id = filename.trim_end_matches(".jsonl").to_string();
+
+        let modified = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S")
+            .ok()
+            .map(|dt| dt.and_utc())
+            .unwrap_or(chrono::Utc::now())
+            .into();
+
+        log_debug(&format!("[sessions] qwen wsl session: {} ({}B)", session_id, size));
+
+        sessions.push(SessionEntry {
+            agent: "qwen".to_string(),
+            session_id,
+            modified_at: format_system_time(modified),
+            size_bytes: size,
+        });
+    }
+
+    Ok(sessions)
+}
+
 fn format_system_time(time: SystemTime) -> String {
     use chrono::{DateTime, Utc};
     let datetime: DateTime<Utc> = time.into();
     datetime.to_rfc3339()
+}
+
+fn is_windows() -> bool {
+    cfg!(target_os = "windows")
+}
+
+fn is_wsl_path(path: &str) -> bool {
+    path.starts_with("/home/") || path.starts_with("/mnt/")
+}
+
+fn whoami() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "marioyahuar".to_string())
 }
