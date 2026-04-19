@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { openGlobalTerminal } from '../lib/invoke'
 import { useUI } from '../contexts/UIContext'
 import { GeneralNotesDialog } from './GeneralNotesDialog'
+import { ManageEcosystemsDialog } from './ManageEcosystemsDialog'
 import type { ProjectViewMode } from '../App'
 
 interface TopBarProps {
@@ -12,6 +13,7 @@ interface TopBarProps {
 export function TopBar({ viewMode, onChangeViewMode }: TopBarProps) {
   const { addToast } = useUI()
   const [isGeneralNotesOpen, setIsGeneralNotesOpen] = useState(false)
+  const [isManageEcosystemsOpen, setIsManageEcosystemsOpen] = useState(false)
 
   const handleOpenTerminal = async (shell: 'wsl' | 'powershell') => {
     try {
@@ -43,6 +45,9 @@ export function TopBar({ viewMode, onChangeViewMode }: TopBarProps) {
         <button onClick={() => setIsGeneralNotesOpen(true)} className="btn-ghost text-sm px-3 py-1">
           Notes
         </button>
+        <button onClick={() => setIsManageEcosystemsOpen(true)} className="btn-ghost text-sm px-3 py-1">
+          Ecosystems
+        </button>
         <button onClick={() => handleOpenTerminal('wsl')} className="btn-ghost text-sm px-3 py-1">
           Terminal WSL
         </button>
@@ -54,6 +59,10 @@ export function TopBar({ viewMode, onChangeViewMode }: TopBarProps) {
       <GeneralNotesDialog
         isOpen={isGeneralNotesOpen}
         onClose={() => setIsGeneralNotesOpen(false)}
+      />
+      <ManageEcosystemsDialog
+        isOpen={isManageEcosystemsOpen}
+        onClose={() => setIsManageEcosystemsOpen(false)}
       />
     </header>
   )

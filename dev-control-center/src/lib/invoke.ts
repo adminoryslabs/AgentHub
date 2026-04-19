@@ -26,6 +26,33 @@ export async function getEcosystems(): Promise<Ecosystem[]> {
   return invoke<Ecosystem[]>('get_ecosystems')
 }
 
+export type CreateEcosystemRequest = {
+  name: string
+  rootPath: string
+  env: string
+  defaultAgent: string
+}
+
+export async function createEcosystem(req: CreateEcosystemRequest): Promise<Ecosystem> {
+  return invoke<Ecosystem>('create_ecosystem', { req })
+}
+
+export type UpdateEcosystemRequest = {
+  id: string
+  name: string
+  rootPath: string
+  env: string
+  defaultAgent: string
+}
+
+export async function updateEcosystem(req: UpdateEcosystemRequest): Promise<Ecosystem> {
+  return invoke<Ecosystem>('update_ecosystem', { req })
+}
+
+export async function deleteEcosystem(id: string): Promise<void> {
+  return invoke<void>('delete_ecosystem', { id })
+}
+
 export type ScanEcosystemFolderCandidate = {
   name: string
   path: string

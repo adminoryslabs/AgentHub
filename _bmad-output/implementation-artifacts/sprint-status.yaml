@@ -95,7 +95,7 @@ development_status:
   epic-7-retrospective: optional
 
   # ========== EPIC 8: Ecosistemas (Padre/Hijos) ==========
-  epic-8: in-progress
+  epic-8: done
   8-1-modelo-de-datos-de-ecosistemas-prototype: superseded
   8-2-toggle-de-vista-por-ecosistemas-prototype: superseded
   8-3-abrir-ecosistema-completo-en-agente-prototype: superseded
@@ -103,7 +103,7 @@ development_status:
   8-2-toggle-de-vista-por-ecosistemas: done
   8-3-abrir-ecosistema-completo-en-agente: done
   8-4-crear-ecosistema-desde-carpeta-e-importar-proyectos-hijos: done
-  8-5-gestion-manual-de-ecosistemas: backlog
+  8-5-gestion-manual-de-ecosistemas: done
   epic-8-retrospective: optional
 
   # ========== EPICS BLOQUEADOS / PROBABLEMENTE DEPRECADOS (Neon) ==========

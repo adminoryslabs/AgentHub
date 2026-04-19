@@ -2,7 +2,13 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use crate::commands::projects::{ensure_data_dir, get_data_dir};
+use crate::commands::projects::{
+    ensure_data_dir,
+    get_data_dir,
+    normalize_path_for_comparison,
+    normalize_path_for_storage,
+    resolve_filesystem_path,
+};
 use crate::models::project::Project;
 use crate::models::ecosystem::{Ecosystem, EcosystemsStore};
 
@@ -32,23 +38,9 @@ fn validate_unique_name(store: &EcosystemsStore, name: &str, excluding_id: Optio
     Ok(())
 }
 
-fn normalize_path_for_env(path: &str, environment: &str) -> String {
-    let separator = if environment == "windows" { '\\' } else { '/' };
-    let mut normalized = path.trim().replace(['/', '\\'], &separator.to_string());
-
-    while normalized.len() > 1 && normalized.ends_with(separator) {
-        normalized.pop();
-    }
-
-    if environment == "windows" {
-        normalized.make_ascii_lowercase();
-    }
-
-    normalized
-}
-
-fn validate_root_path(root_path: &str) -> Result<(), String> {
-    let path = Path::new(root_path);
+fn validate_root_path(root_path: &str, environment: &str) -> Result<(), String> {
+    let filesystem_path = resolve_filesystem_path(root_path, environment)?;
+    let path = Path::new(&filesystem_path);
     if !path.exists() {
         return Err(format!("Ruta no encontrada: {}", root_path));
     }
@@ -68,11 +60,42 @@ fn create_ecosystem_record(
     default_agent: String,
 ) -> Result<Ecosystem, String> {
     validate_unique_name(store, &name, None)?;
-    validate_root_path(&root_path)?;
+    validate_root_path(&root_path, &environment)?;
 
     let ecosystem = Ecosystem::new(name, root_path, environment, default_agent);
     store.ecosystems.push(ecosystem.clone());
     Ok(ecosystem)
+}
+
+fn path_belongs_to_root(project_path: &str, root_path: &str, environment: &str) -> bool {
+    let project_path = normalize_path_for_comparison(project_path, environment);
+    let root_path = normalize_path_for_comparison(root_path, environment);
+
+    if project_path == root_path {
+        return true;
+    }
+
+    let separator = if environment == "windows" { '\\' } else { '/' };
+    let root_prefix = format!("{}{}", root_path, separator);
+    project_path.starts_with(&root_prefix)
+}
+
+fn validate_assigned_projects(root_path: &str, environment: &str, ecosystem_id: uuid::Uuid) -> Result<(), String> {
+    let projects_store = crate::commands::projects::load_projects()?;
+    let invalid_project = projects_store.projects.iter().find(|project| {
+        project.ecosystem_id == Some(ecosystem_id)
+            && (project.environment != environment
+                || !path_belongs_to_root(&project.path, root_path, environment))
+    });
+
+    if let Some(project) = invalid_project {
+        return Err(format!(
+            "El proyecto '{}' ya no encaja en este ecosistema. Ajusta sus asignaciones antes de guardar.",
+            project.name
+        ));
+    }
+
+    Ok(())
 }
 
 fn build_imported_project(path: &str, ecosystem: &Ecosystem) -> Result<Project, String> {
@@ -162,7 +185,7 @@ pub struct CreateEcosystemRequest {
 pub async fn create_ecosystem(req: CreateEcosystemRequest) -> Result<Ecosystem, String> {
     let mut store = load_ecosystems()?;
     let name = normalize_required_text(req.name, "name")?;
-    let root_path = normalize_required_text(req.root_path, "rootPath")?;
+    let root_path = normalize_path_for_storage(&normalize_required_text(req.root_path, "rootPath")?, &req.environment)?;
     let ecosystem = create_ecosystem_record(&mut store, name, root_path, req.environment, req.default_agent)?;
     save_ecosystems(&store)?;
     Ok(ecosystem)
@@ -170,8 +193,9 @@ pub async fn create_ecosystem(req: CreateEcosystemRequest) -> Result<Ecosystem, 
 
 #[tauri::command]
 pub async fn scan_ecosystem_folder(req: ScanEcosystemFolderRequest) -> Result<ScanEcosystemFolderResponse, String> {
-    let root_path = normalize_required_text(req.root_path, "rootPath")?;
-    validate_root_path(&root_path)?;
+    let root_path = normalize_path_for_storage(&normalize_required_text(req.root_path, "rootPath")?, &req.environment)?;
+    validate_root_path(&root_path, &req.environment)?;
+    let scan_path = resolve_filesystem_path(&root_path, &req.environment)?;
 
     let projects_store = crate::commands::projects::load_projects()?;
     let registered_by_path: std::collections::HashMap<String, String> = projects_store
@@ -179,16 +203,16 @@ pub async fn scan_ecosystem_folder(req: ScanEcosystemFolderRequest) -> Result<Sc
         .iter()
         .map(|project| {
             (
-                normalize_path_for_env(&project.path, &project.environment),
+                normalize_path_for_comparison(&project.path, &project.environment),
                 project.name.clone(),
             )
         })
         .collect();
 
-    let normalized_root = normalize_path_for_env(&root_path, &req.environment);
+    let normalized_root = normalize_path_for_comparison(&root_path, &req.environment);
     let mut candidates = Vec::new();
 
-    let entries = fs::read_dir(&root_path)
+    let entries = fs::read_dir(&scan_path)
         .map_err(|e| format!("No se pudo leer {}: {}", root_path, e))?;
 
     for entry in entries {
@@ -199,7 +223,8 @@ pub async fn scan_ecosystem_folder(req: ScanEcosystemFolderRequest) -> Result<Sc
         }
 
         let path_str = path.to_string_lossy().to_string();
-        let normalized_path = normalize_path_for_env(&path_str, &req.environment);
+        let candidate_path = normalize_path_for_storage(&path_str, &req.environment)?;
+        let normalized_path = normalize_path_for_comparison(&candidate_path, &req.environment);
 
         if normalized_path == normalized_root {
             continue;
@@ -210,7 +235,7 @@ pub async fn scan_ecosystem_folder(req: ScanEcosystemFolderRequest) -> Result<Sc
 
         candidates.push(EcosystemFolderCandidate {
             name,
-            path: path_str,
+            path: candidate_path,
             is_already_registered: existing_project_name.is_some(),
             existing_project_name,
         });
@@ -239,8 +264,10 @@ pub async fn update_ecosystem(req: UpdateEcosystemRequest) -> Result<Ecosystem, 
         .map_err(|_| format!("ID inválido: {}", req.id))?;
 
     let name = normalize_required_text(req.name, "name")?;
-    let root_path = normalize_required_text(req.root_path, "rootPath")?;
+    let root_path = normalize_path_for_storage(&normalize_required_text(req.root_path, "rootPath")?, &req.environment)?;
     validate_unique_name(&store, &name, Some(ecosystem_id))?;
+    validate_root_path(&root_path, &req.environment)?;
+    validate_assigned_projects(&root_path, &req.environment, ecosystem_id)?;
 
     let ecosystem = store
         .ecosystems
@@ -281,8 +308,8 @@ pub async fn import_ecosystem_folder(
     req: ImportEcosystemFolderRequest,
 ) -> Result<ImportEcosystemFolderResponse, String> {
     let name = normalize_required_text(req.name, "name")?;
-    let root_path = normalize_required_text(req.root_path, "rootPath")?;
-    validate_root_path(&root_path)?;
+    let root_path = normalize_path_for_storage(&normalize_required_text(req.root_path, "rootPath")?, &req.environment)?;
+    validate_root_path(&root_path, &req.environment)?;
 
     if req.selected_paths.is_empty() {
         return Err("Debes seleccionar al menos una carpeta para importar".to_string());
@@ -296,12 +323,12 @@ pub async fn import_ecosystem_folder(
     let selected_set: HashSet<String> = req
         .selected_paths
         .iter()
-        .map(|path| normalize_path_for_env(path, &req.environment))
+        .map(|path| normalize_path_for_comparison(path, &req.environment))
         .collect();
     let candidates_by_path: std::collections::HashMap<String, EcosystemFolderCandidate> = scan
         .candidates
         .into_iter()
-        .map(|candidate| (normalize_path_for_env(&candidate.path, &req.environment), candidate))
+        .map(|candidate| (normalize_path_for_comparison(&candidate.path, &req.environment), candidate))
         .collect();
 
     let mut import_paths = Vec::new();

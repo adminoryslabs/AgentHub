@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 use crate::commands::ecosystems::load_ecosystems;
 use crate::models::project::{Project, ProjectsStore};
@@ -15,17 +16,34 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
     })
 }
 
-fn parse_ecosystem_id(value: Option<String>) -> Result<Option<uuid::Uuid>, String> {
-    let Some(value) = normalize_optional_text(value) else {
-        return Ok(None);
-    };
-
-    uuid::Uuid::parse_str(&value)
-        .map(Some)
-        .map_err(|_| format!("ecosystemId inválido: {}", value))
+pub(crate) fn is_windows_host() -> bool {
+    cfg!(target_os = "windows")
 }
 
-fn normalize_path_for_env(path: &str, environment: &str) -> String {
+fn run_wslpath(flag: &str, path: &str) -> Result<String, String> {
+    let output = Command::new("wsl")
+        .args(["wslpath", flag, path])
+        .output()
+        .map_err(|e| format!("No se pudo ejecutar wslpath: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            format!("wslpath fallo para la ruta: {}", path)
+        } else {
+            stderr
+        });
+    }
+
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if value.is_empty() {
+        return Err(format!("wslpath devolvio una ruta vacia para {}", path));
+    }
+
+    Ok(value)
+}
+
+pub(crate) fn normalize_path_for_comparison(path: &str, environment: &str) -> String {
     let separator = if environment == "windows" { '\\' } else { '/' };
     let mut normalized = path.trim().replace(['/', '\\'], &separator.to_string());
 
@@ -40,9 +58,50 @@ fn normalize_path_for_env(path: &str, environment: &str) -> String {
     normalized
 }
 
+pub(crate) fn normalize_path_for_storage(path: &str, environment: &str) -> Result<String, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Ok(String::new());
+    }
+
+    if environment == "wsl" {
+        if trimmed.starts_with("/") {
+            return Ok(normalize_path_for_comparison(trimmed, environment));
+        }
+
+        if is_windows_host() {
+            return run_wslpath("-u", trimmed).map(|value| normalize_path_for_comparison(&value, environment));
+        }
+
+        return Ok(normalize_path_for_comparison(trimmed, environment));
+    }
+
+    Ok(normalize_path_for_comparison(trimmed, environment))
+}
+
+pub(crate) fn resolve_filesystem_path(path: &str, environment: &str) -> Result<String, String> {
+    let normalized = normalize_path_for_storage(path, environment)?;
+
+    if environment == "wsl" && is_windows_host() {
+        return run_wslpath("-w", &normalized);
+    }
+
+    Ok(normalized)
+}
+
+fn parse_ecosystem_id(value: Option<String>) -> Result<Option<uuid::Uuid>, String> {
+    let Some(value) = normalize_optional_text(value) else {
+        return Ok(None);
+    };
+
+    uuid::Uuid::parse_str(&value)
+        .map(Some)
+        .map_err(|_| format!("ecosystemId inválido: {}", value))
+}
+
 fn path_belongs_to_root(project_path: &str, root_path: &str, environment: &str) -> bool {
-    let project_path = normalize_path_for_env(project_path, environment);
-    let root_path = normalize_path_for_env(root_path, environment);
+    let project_path = normalize_path_for_comparison(project_path, environment);
+    let root_path = normalize_path_for_comparison(root_path, environment);
 
     if project_path == root_path {
         return true;
@@ -159,10 +218,11 @@ pub async fn create_project(req: CreateProjectRequest) -> Result<Project, String
     }
 
     let mut store = load_projects()?;
-    let ecosystem_id = validate_ecosystem_id(parse_ecosystem_id(req.ecosystem_id)?, &req.environment, &req.path)?;
+    let path = normalize_path_for_storage(&req.path, &req.environment)?;
+    let ecosystem_id = validate_ecosystem_id(parse_ecosystem_id(req.ecosystem_id)?, &req.environment, &path)?;
     let project = Project::new(
         req.name,
-        req.path,
+        path,
         req.environment,
         req.preferred_editor,
         req.default_agent,
@@ -200,14 +260,15 @@ pub async fn update_project(req: UpdateProjectRequest) -> Result<Project, String
     let project_id = uuid::Uuid::parse_str(&req.id)
         .map_err(|_| format!("ID inválido: {}", req.id))?;
 
-    let ecosystem_id = validate_ecosystem_id(parse_ecosystem_id(req.ecosystem_id)?, &req.environment, &req.path)?;
+    let path = normalize_path_for_storage(&req.path, &req.environment)?;
+    let ecosystem_id = validate_ecosystem_id(parse_ecosystem_id(req.ecosystem_id)?, &req.environment, &path)?;
 
     let project = store.projects.iter_mut()
         .find(|p| p.id == project_id)
         .ok_or_else(|| format!("Proyecto no encontrado: {}", req.id))?;
 
     project.name = req.name;
-    project.path = req.path;
+    project.path = path;
     project.environment = req.environment;
     project.preferred_editor = req.preferred_editor;
     project.default_agent = req.default_agent;
