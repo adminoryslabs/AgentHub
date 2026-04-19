@@ -1,6 +1,6 @@
 ---
 story_key: 1-2-crud-proyectos-rust-projects-json
-status: review
+status: done
 epic: 1
 epic_title: Setup & Gestión de Proyectos
 ---

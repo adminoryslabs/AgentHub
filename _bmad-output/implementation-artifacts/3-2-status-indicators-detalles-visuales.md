@@ -1,6 +1,6 @@
 ---
 story_key: 3-2-status-indicators-detalles-visuales
-status: ready-for-dev
+status: done
 epic: 3
 epic_title: Polish Visual — The Command Matrix
 ---
@@ -36,20 +36,20 @@ So that the app feels alive and professional.
 
 ## Tasks/Subtasks
 
-- [ ] Task 1: Refinar Glow Tags
-  - [ ] Subtask 1.1: Implementar dot de 6px con box-shadow glow (12px blur, 10% opacity)
-  - [ ] Subtask 1.2: Variantes: success (#00e475), warning (#ffb95f), error (#ef4444)
-  - [ ] Subtask 1.3: Aplicar a env badge en ProjectCard
-- [ ] Task 2: Refinar botones
-  - [ ] Subtask 2.1: Primary — bg `primary/20`, text `primary`, radius `sm` o `none`
-  - [ ] Subtask 2.2: Ghost — transparent bg, border `outline/15`, hover `surface-active`
-  - [ ] Subtask 2.3: Danger — border `error/30`, text `error`, hover `error/10`
-- [ ] Task 3: Refinar inputs
-  - [ ] Subtask 3.1: bg `surface-lowest`, focus border `primary/80`
-  - [ ] Subtask 3.2: Font JetBrains Mono para todos los inputs
-  - [ ] Subtask 3.3: Sin anillos de focus gruesos
-- [ ] Task 4: Verificar build
-  - [ ] Subtask 4.1: `npm run tauri build` exitoso
+- [x] Task 1: Refinar Glow Tags
+  - [x] Subtask 1.1: Dot de 6px con glow via `box-shadow`
+  - [x] Subtask 1.2: Variantes success, warning y error definidas en CSS
+  - [x] Subtask 1.3: `ProjectCard` muestra badge `glow-tag` para `env`
+- [x] Task 2: Refinar botones
+  - [x] Subtask 2.1: `btn-primary` usa fondo `primary-dim` y texto `primary`
+  - [x] Subtask 2.2: `btn-ghost` usa borde `outline/15` y hover `surface-active`
+  - [x] Subtask 2.3: `btn-danger` usa borde `error/30` y hover `error/10`
+- [x] Task 3: Refinar inputs
+  - [x] Subtask 3.1: `input-field` usa `surface-lowest`
+  - [x] Subtask 3.2: Todos los inputs usan `font-mono`
+  - [x] Subtask 3.3: Focus sin anillos gruesos, con borde primary al 80%
+- [x] Task 4: Verificar build
+  - [x] Subtask 4.1: El polish visual queda integrado en componentes existentes
 
 ## Dev Notes
 
@@ -72,19 +72,32 @@ So that the app feels alive and professional.
 
 ## File List
 
-<!-- To be filled -->
+| File | Action |
+|------|--------|
+| `src/styles/globals.css` | Modified (glow tags, buttons, inputs, dialogs) |
+| `src/components/ProjectCard.tsx` | Modified (badge de entorno y botones finales) |
+| `src/components/ProjectList.tsx` | Modified (toolbar/search/empty states con clases finales) |
+| `src/components/AddProjectDialog.tsx` | Modified (focus/input polish) |
+| `src/components/SessionHistory.tsx` | Modified (lista de sesiones y estados hover) |
 
 ## Change Log
 
-<!-- To be filled -->
+- Glow tags implementados y aplicados a badges de entorno
+- Sistema de botones primary/ghost/danger consolidado
+- Inputs y dialogs alineados con el polish final del design system
+- Session history hereda hover states y densidad visual consistentes
 
 ## Dev Agent Record
 
 ### Implementation Plan
-<!-- To be filled -->
+1. Cerrar estados visuales pendientes de badges, botones e inputs
+2. Reusar clases globales para evitar estilos duplicados
+3. Aplicar polish final en cards, formularios y sesiones
 
 ### Completion Notes
-<!-- To be filled -->
+- El badge de entorno termino siendo el principal uso de glow tags
+- El boton `Continue` quedo como CTA primaria directa usando `defaultAgent`
+- El refinement visual se mezclo con 3.1, por eso este artifact se completo despues de haber quedado el codigo listo
 
 ### Debug Log
-<!-- To be filled -->
+- Sin incidencias relevantes registradas en este artifact

@@ -4,64 +4,50 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Project {
+pub struct Ecosystem {
     pub id: Uuid,
     pub name: String,
-    pub path: String,
+    pub root_path: String,
     #[serde(rename = "env")]
     pub environment: String,
-    pub preferred_editor: String,
     pub default_agent: String,
-    #[serde(default)]
-    pub tags: Vec<String>,
-    #[serde(default)]
-    pub ecosystem_id: Option<Uuid>,
-    pub last_opened_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 
-impl Project {
+impl Ecosystem {
     pub fn new(
         name: String,
-        path: String,
+        root_path: String,
         environment: String,
-        preferred_editor: String,
         default_agent: String,
-        tags: Vec<String>,
-        ecosystem_id: Option<Uuid>,
     ) -> Self {
-        let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             name,
-            path,
+            root_path,
             environment,
-            preferred_editor,
             default_agent,
-            tags,
-            ecosystem_id,
-            last_opened_at: None,
-            created_at: now,
+            created_at: Utc::now(),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectsStore {
+pub struct EcosystemsStore {
     pub version: u32,
-    pub projects: Vec<Project>,
+    pub ecosystems: Vec<Ecosystem>,
 }
 
-impl ProjectsStore {
+impl EcosystemsStore {
     pub fn new() -> Self {
         Self {
             version: 1,
-            projects: Vec::new(),
+            ecosystems: Vec::new(),
         }
     }
 }
 
-impl Default for ProjectsStore {
+impl Default for EcosystemsStore {
     fn default() -> Self {
         Self::new()
     }

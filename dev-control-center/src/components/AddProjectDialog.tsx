@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { type CreateProjectRequest, type Project } from '../lib/invoke'
+import { getEcosystems, type CreateProjectRequest, type Ecosystem, type Project, pickDirectory } from '../lib/invoke'
 import { useProjects } from '../contexts/ProjectsContext'
 
 interface AddProjectDialogProps {
@@ -33,8 +33,33 @@ export function AddProjectDialog({ isOpen, onClose, editingProject }: AddProject
   const [preferredEditor, setPreferredEditor] = useState('vscode')
   const [defaultAgent, setDefaultAgent] = useState('qwencode')
   const [tags, setTags] = useState('')
+  const [ecosystemId, setEcosystemId] = useState('')
+  const [ecosystems, setEcosystems] = useState<Ecosystem[]>([])
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadData = async () => {
+      try {
+        const data = await getEcosystems()
+        if (!cancelled) {
+          setEcosystems(data)
+        }
+      } catch {
+        if (!cancelled) {
+          setEcosystems([])
+        }
+      }
+    }
+
+    loadData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (editingProject) {
@@ -44,6 +69,7 @@ export function AddProjectDialog({ isOpen, onClose, editingProject }: AddProject
       setPreferredEditor(editingProject.preferredEditor)
       setDefaultAgent(editingProject.defaultAgent)
       setTags(editingProject.tags.join(', '))
+      setEcosystemId(editingProject.ecosystemId ?? '')
     } else {
       setName('')
       setPath('')
@@ -51,6 +77,7 @@ export function AddProjectDialog({ isOpen, onClose, editingProject }: AddProject
       setPreferredEditor('vscode')
       setDefaultAgent('qwencode')
       setTags('')
+      setEcosystemId('')
     }
     setError('')
   }, [editingProject, isOpen])
@@ -71,6 +98,7 @@ export function AddProjectDialog({ isOpen, onClose, editingProject }: AddProject
         preferredEditor,
         defaultAgent,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        ecosystemId: ecosystemId || null,
       }
       if (editingProject) {
         await editProject({ ...req, id: editingProject.id })
@@ -107,15 +135,29 @@ export function AddProjectDialog({ isOpen, onClose, editingProject }: AddProject
             />
           </div>
 
-          <div>
-            <label className="block text-label-sm text-secondary mb-1">Path</label>
+          <div className="flex items-center">
+            <label className="block text-label-sm text-secondary mb-1 mr-2">Path</label>
             <input
               type="text"
               value={path}
               onChange={e => setPath(e.target.value)}
-              className="input-field"
+              className="input-field flex-1"
               placeholder="/home/user/dev/my-project"
             />
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const dir = await pickDirectory()
+                  if (dir) setPath(dir)
+                } catch (e) {
+                  // ignore, toast could be added later
+                }
+              }}
+              className="btn-ghost ml-2"
+            >
+              Browse
+            </button>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -154,6 +196,18 @@ export function AddProjectDialog({ isOpen, onClose, editingProject }: AddProject
               className="input-field"
               placeholder="backend, api"
             />
+          </div>
+
+          <div>
+            <label className="block text-label-sm text-secondary mb-1">Ecosystem (optional)</label>
+            <select value={ecosystemId} onChange={e => setEcosystemId(e.target.value)} className="input-field">
+              <option value="">Ungrouped</option>
+              {ecosystems.map(ecosystem => (
+                <option key={ecosystem.id} value={ecosystem.id}>
+                  {ecosystem.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {error && (

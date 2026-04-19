@@ -1,9 +1,96 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::commands::ecosystems::load_ecosystems;
 use crate::models::project::{Project, ProjectsStore};
 
-fn get_projects_dir() -> PathBuf {
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn parse_ecosystem_id(value: Option<String>) -> Result<Option<uuid::Uuid>, String> {
+    let Some(value) = normalize_optional_text(value) else {
+        return Ok(None);
+    };
+
+    uuid::Uuid::parse_str(&value)
+        .map(Some)
+        .map_err(|_| format!("ecosystemId inválido: {}", value))
+}
+
+fn normalize_path_for_env(path: &str, environment: &str) -> String {
+    let separator = if environment == "windows" { '\\' } else { '/' };
+    let mut normalized = path.trim().replace(['/', '\\'], &separator.to_string());
+
+    while normalized.len() > 1 && normalized.ends_with(separator) {
+        normalized.pop();
+    }
+
+    if environment == "windows" {
+        normalized.make_ascii_lowercase();
+    }
+
+    normalized
+}
+
+fn path_belongs_to_root(project_path: &str, root_path: &str, environment: &str) -> bool {
+    let project_path = normalize_path_for_env(project_path, environment);
+    let root_path = normalize_path_for_env(root_path, environment);
+
+    if project_path == root_path {
+        return true;
+    }
+
+    let separator = if environment == "windows" { '\\' } else { '/' };
+    let root_prefix = format!("{}{}", root_path, separator);
+    project_path.starts_with(&root_prefix)
+}
+
+fn validate_ecosystem_id(
+    ecosystem_id: Option<uuid::Uuid>,
+    environment: &str,
+    project_path: &str,
+) -> Result<Option<uuid::Uuid>, String> {
+    let Some(ecosystem_id) = ecosystem_id else {
+        return Ok(None);
+    };
+
+    let ecosystems_store = load_ecosystems()?;
+    let ecosystem = ecosystems_store
+        .ecosystems
+        .iter()
+        .find(|ecosystem| ecosystem.id == ecosystem_id)
+        .ok_or_else(|| format!("Ecosistema no encontrado: {}", ecosystem_id))?;
+
+    if ecosystem.environment != environment {
+        return Err(format!(
+            "El proyecto usa env '{}' pero el ecosistema '{}' usa env '{}'",
+            environment,
+            ecosystem.name,
+            ecosystem.environment
+        ));
+    }
+
+    if !path_belongs_to_root(project_path, &ecosystem.root_path, environment) {
+        return Err(format!(
+            "La ruta del proyecto '{}' no esta dentro del root del ecosistema '{}' ({})",
+            project_path,
+            ecosystem.name,
+            ecosystem.root_path
+        ));
+    }
+
+    Ok(Some(ecosystem_id))
+}
+
+pub(crate) fn get_data_dir() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
@@ -11,11 +98,11 @@ fn get_projects_dir() -> PathBuf {
 }
 
 fn get_projects_path() -> PathBuf {
-    get_projects_dir().join("projects.json")
+    get_data_dir().join("projects.json")
 }
 
-fn ensure_projects_dir() -> Result<(), String> {
-    let dir = get_projects_dir();
+pub(crate) fn ensure_data_dir() -> Result<(), String> {
+    let dir = get_data_dir();
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| format!("No se pudo crear el directorio {}: {}", dir.display(), e))?;
     }
@@ -35,7 +122,7 @@ pub fn load_projects() -> Result<ProjectsStore, String> {
 }
 
 pub fn save_projects(store: &ProjectsStore) -> Result<(), String> {
-    ensure_projects_dir()?;
+    ensure_data_dir()?;
     let path = get_projects_path();
     let content = serde_json::to_string_pretty(store)
         .map_err(|e| format!("No se pudo serializar projects.json: {}", e))?;
@@ -61,6 +148,8 @@ pub struct CreateProjectRequest {
     pub default_agent: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub ecosystem_id: Option<String>,
 }
 
 #[tauri::command]
@@ -70,6 +159,7 @@ pub async fn create_project(req: CreateProjectRequest) -> Result<Project, String
     }
 
     let mut store = load_projects()?;
+    let ecosystem_id = validate_ecosystem_id(parse_ecosystem_id(req.ecosystem_id)?, &req.environment, &req.path)?;
     let project = Project::new(
         req.name,
         req.path,
@@ -77,6 +167,7 @@ pub async fn create_project(req: CreateProjectRequest) -> Result<Project, String
         req.preferred_editor,
         req.default_agent,
         req.tags,
+        ecosystem_id,
     );
     store.projects.push(project.clone());
     save_projects(&store)?;
@@ -95,6 +186,8 @@ pub struct UpdateProjectRequest {
     pub default_agent: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub ecosystem_id: Option<String>,
 }
 
 #[tauri::command]
@@ -107,6 +200,8 @@ pub async fn update_project(req: UpdateProjectRequest) -> Result<Project, String
     let project_id = uuid::Uuid::parse_str(&req.id)
         .map_err(|_| format!("ID inválido: {}", req.id))?;
 
+    let ecosystem_id = validate_ecosystem_id(parse_ecosystem_id(req.ecosystem_id)?, &req.environment, &req.path)?;
+
     let project = store.projects.iter_mut()
         .find(|p| p.id == project_id)
         .ok_or_else(|| format!("Proyecto no encontrado: {}", req.id))?;
@@ -117,6 +212,7 @@ pub async fn update_project(req: UpdateProjectRequest) -> Result<Project, String
     project.preferred_editor = req.preferred_editor;
     project.default_agent = req.default_agent;
     project.tags = req.tags;
+    project.ecosystem_id = ecosystem_id;
 
     let updated = project.clone();
     save_projects(&store)?;
@@ -138,4 +234,50 @@ pub async fn delete_project(id: String) -> Result<(), String> {
 
     save_projects(&store)?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn pick_directory() -> Result<Option<String>, String> {
+    // En WSL el diálogo nativo de rfd usa D-Bus/portales que no están disponibles.
+    // Usamos PowerShell de Windows para mostrar el FolderBrowserDialog.
+    let is_wsl = std::env::var("WSL_DISTRO_NAME").is_ok()
+        || std::fs::read_to_string("/proc/version")
+            .map(|c| c.to_lowercase().contains("microsoft") || c.to_lowercase().contains("wsl"))
+            .unwrap_or(false);
+
+    if is_wsl {
+        let output = std::process::Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; \
+                 $d = New-Object System.Windows.Forms.FolderBrowserDialog; \
+                 $d.Description = 'Seleccionar carpeta del proyecto'; \
+                 $d.RootFolder = 'MyComputer'; \
+                 if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }",
+            ])
+            .output()
+            .map_err(|e| format!("PowerShell no disponible: {}", e))?;
+
+        let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if raw.is_empty() {
+            return Ok(None); // usuario canceló
+        }
+
+        // Convertir ruta Windows (C:\...) a ruta WSL (/mnt/c/...) con wslpath
+        let wsl_path = std::process::Command::new("wslpath")
+            .arg(&raw)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or(raw);
+
+        return Ok(Some(wsl_path));
+    }
+
+    let path = rfd::AsyncFileDialog::new()
+        .pick_folder()
+        .await;
+
+    Ok(path.map(|p| p.path().to_string_lossy().to_string()))
 }

@@ -1,6 +1,6 @@
 ---
 story_key: 1-1-scaffold-tauri-app-configurar-permisos
-status: review
+status: done
 epic: 1
 epic_title: Setup & Gestión de Proyectos
 ---

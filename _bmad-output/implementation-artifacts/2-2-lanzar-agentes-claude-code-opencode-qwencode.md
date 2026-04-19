@@ -1,6 +1,6 @@
 ---
 story_key: 2-2-lanzar-agentes-claude-code-opencode-qwencode
-status: review
+status: done
 epic: 2
 epic_title: Acciones Locales — Abrir Herramientas
 ---

@@ -1,6 +1,6 @@
 ---
 story_key: 1-3-frontend-dashboard-basico-con-projectlist-addprojectdialog
-status: review
+status: done
 epic: 1
 epic_title: Setup & Gestión de Proyectos
 ---

@@ -1,5 +1,5 @@
 # generated: 2026-04-10
-# last_updated: 2026-04-10
+# last_updated: 2026-04-18
 # project: Dev Control Center
 # project_key: NOKEY
 # tracking_system: file-system
@@ -22,6 +22,7 @@
 #   - in-progress: Developer actively working on implementation
 #   - review: Ready for code review (via Dev's code-review workflow)
 #   - done: Story completed
+#   - superseded: Story was implemented or planned under an old definition and must be reworked under the updated epic scope
 #
 # Retrospective Status:
 #   - optional: Can be completed but not required
@@ -35,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-10
-last_updated: 2026-04-10
+last_updated: 2026-04-18
 project: Dev Control Center
 project_key: NOKEY
 tracking_system: file-system
@@ -77,6 +78,34 @@ development_status:
   5-3-reabrir-sesion: done
   epic-5-retrospective: optional
 
-  # ========== EPICS BLOQUEADOS (dependen de Neon) ==========
+  # ========== EPIC 6: Quick Wins ==========
+  epic-6: in-progress
+  6-1-boton-de-terminal-por-proyecto: done
+  6-2-boton-de-terminal-general: done
+  6-3-abrir-settings-del-agente: done
+  6-4-file-picker-para-add-project: done
+  6-5-crear-proyecto-desde-cero: backlog
+  epic-6-retrospective: optional
+
+  # ========== EPIC 7: Bloc de Notas ==========
+  epic-7: done
+  7-1-persistencia-de-notas-en-rust: done
+  7-2-ui-del-bloc-de-notas-por-proyecto: done
+  7-3-ui-del-bloc-de-notas-general: done
+  epic-7-retrospective: optional
+
+  # ========== EPIC 8: Ecosistemas (Padre/Hijos) ==========
+  epic-8: in-progress
+  8-1-modelo-de-datos-de-ecosistemas-prototype: superseded
+  8-2-toggle-de-vista-por-ecosistemas-prototype: superseded
+  8-3-abrir-ecosistema-completo-en-agente-prototype: superseded
+  8-1-entidad-de-ecosistema-y-relacion-con-proyectos: done
+  8-2-toggle-de-vista-por-ecosistemas: done
+  8-3-abrir-ecosistema-completo-en-agente: done
+  8-4-crear-ecosistema-desde-carpeta-e-importar-proyectos-hijos: done
+  8-5-gestion-manual-de-ecosistemas: backlog
+  epic-8-retrospective: optional
+
+  # ========== EPICS BLOQUEADOS / PROBABLEMENTE DEPRECADOS (Neon) ==========
   epic-continue-work: backlog
   epic-dashboard-con-estado: backlog

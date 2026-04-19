@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getSessions, resumeAgentSession, type SessionEntry } from '../lib/invoke'
+import { getSessions, resumeAgentSession, openAgentSettings, type SessionEntry } from '../lib/invoke'
 import { useUI } from '../contexts/UIContext'
 
 interface SessionHistoryProps {
@@ -66,6 +66,18 @@ export function SessionHistory({ projectPath, projectId }: SessionHistoryProps) 
     }
   }
 
+  const handleOpenSettings = async (agent: string) => {
+    try {
+      await openAgentSettings(agent)
+      addToast(
+        `${AGENT_LABELS[agent] || agent} settings opened`,
+        'success'
+      )
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : String(err), 'error')
+    }
+  }
+
   // Group sessions by agent
   const grouped = sessions.reduce<Record<string, SessionEntry[]>>((acc, s) => {
     if (!acc[s.agent]) acc[s.agent] = []
@@ -103,9 +115,18 @@ export function SessionHistory({ projectPath, projectId }: SessionHistoryProps) 
           ) : (
             Object.entries(grouped).map(([agent, agentSessions]) => (
               <div key={agent}>
-                <p className={`text-label-sm font-medium ${AGENT_COLORS[agent] || 'text-secondary'}`}>
-                  {AGENT_LABELS[agent] || agent} ({agentSessions.length})
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className={`text-label-sm font-medium ${AGENT_COLORS[agent] || 'text-secondary'}`}>
+                    {AGENT_LABELS[agent] || agent} ({agentSessions.length})
+                  </p>
+                  <button
+                    onClick={() => handleOpenSettings(agent)}
+                    className="text-label-sm text-outline hover:text-secondary transition-colors"
+                    title={`Open ${AGENT_LABELS[agent] || agent} settings`}
+                  >
+                    ⚙ Settings
+                  </button>
+                </div>
                 <div className="mt-1 space-y-0.5">
                   {agentSessions.map((session, i) => (
                     <button

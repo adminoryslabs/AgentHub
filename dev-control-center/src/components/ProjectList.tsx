@@ -1,16 +1,61 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { ProjectViewMode } from '../App'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useUI } from '../contexts/UIContext'
 import { ProjectCard } from './ProjectCard'
 import { AddProjectDialog } from './AddProjectDialog'
+import { AddEcosystemFolderDialog } from './AddEcosystemFolderDialog'
+import { getEcosystems, launchEcosystemAgent, type Ecosystem, type Project } from '../lib/invoke'
 
-export function ProjectList() {
+interface ProjectListProps {
+  viewMode: ProjectViewMode
+}
+
+type EcosystemGroup = {
+  key: string
+  label: string
+  ecosystemId: string | null
+  defaultAgent: string | null
+  projects: Project[]
+}
+
+export function ProjectList({ viewMode }: ProjectListProps) {
   const { projects, isLoading, error, removeProject } = useProjects()
   const { addToast } = useUI()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEcosystemDialogOpen, setIsEcosystemDialogOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<any>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [ecosystems, setEcosystems] = useState<Ecosystem[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadData = async () => {
+      try {
+        const data = await getEcosystems()
+        if (!cancelled) {
+          setEcosystems(data)
+        }
+      } catch {
+        if (!cancelled) {
+          setEcosystems([])
+        }
+      }
+    }
+
+    loadData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [projects])
+
+  const ecosystemsById = useMemo(() => {
+    return new Map(ecosystems.map(ecosystem => [ecosystem.id, ecosystem]))
+  }, [ecosystems])
 
   const handleEdit = (project: any) => {
     setEditingProject(project)
@@ -40,6 +85,15 @@ export function ProjectList() {
     addToast(message, 'error')
   }
 
+  const handleLaunchEcosystem = async (ecosystemId: string, ecosystemName: string, agent: string) => {
+    try {
+      await launchEcosystemAgent(ecosystemId)
+      addToast(`${agent} launched for ecosystem ${ecosystemName}`, 'success')
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : String(err), 'error')
+    }
+  }
+
   // Sort by lastOpenedAt DESC, nulls last
   const sortedProjects = useMemo(() => {
     return [...projects].sort((a, b) => {
@@ -59,6 +113,78 @@ export function ProjectList() {
       p.tags.some(t => t.toLowerCase().includes(q))
     )
   }, [sortedProjects, searchQuery])
+
+  const ecosystemGroups = useMemo<EcosystemGroup[]>(() => {
+    const groups = new Map<string, EcosystemGroup>()
+
+    for (const project of filteredProjects) {
+      const ecosystem = project.ecosystemId ? ecosystemsById.get(project.ecosystemId) : null
+      const label = ecosystem?.name || 'Ungrouped'
+      const key = ecosystem?.id || '__ungrouped__'
+      const group = groups.get(key)
+
+      if (group) {
+        group.projects.push(project)
+        continue
+      }
+
+      groups.set(key, {
+        key,
+        label,
+        ecosystemId: ecosystem?.id ?? null,
+        defaultAgent: ecosystem?.defaultAgent ?? null,
+        projects: [project],
+      })
+    }
+
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.key === '__ungrouped__') return 1
+      if (b.key === '__ungrouped__') return -1
+      return a.label.localeCompare(b.label)
+    })
+  }, [ecosystemsById, filteredProjects])
+
+  useEffect(() => {
+    if (viewMode !== 'ecosystem') {
+      return
+    }
+
+    setExpandedGroups(current => {
+      const next = { ...current }
+
+      for (const group of ecosystemGroups) {
+        if (!(group.key in next)) {
+          next[group.key] = true
+        }
+      }
+
+      return next
+    })
+  }, [ecosystemGroups, viewMode])
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(current => ({
+      ...current,
+      [key]: !current[key],
+    }))
+  }
+
+  const renderProjectGrid = (items: Project[]) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      {items.map(project => (
+        <ProjectCard
+          key={project.id}
+          project={project}
+          ecosystemName={project.ecosystemId ? ecosystemsById.get(project.ecosystemId)?.name ?? null : null}
+          onEdit={() => handleEdit(project)}
+          onDelete={() => handleDelete(project.id)}
+          onOpenEditor={handleOpenEditor}
+          onLaunchAgent={handleLaunchAgent}
+          onError={handleError}
+        />
+      ))}
+    </div>
+  )
 
   if (isLoading) {
     return (
@@ -89,12 +215,22 @@ export function ProjectList() {
         >
           Add Project to get started
         </button>
+        <button
+          onClick={() => setIsEcosystemDialogOpen(true)}
+          className="btn-ghost px-4 py-2 ml-2"
+        >
+          Add Ecosystem Folder
+        </button>
         <AddProjectDialog
           isOpen={isDialogOpen}
           onClose={() => {
             setIsDialogOpen(false)
             setEditingProject(null)
           }}
+        />
+        <AddEcosystemFolderDialog
+          isOpen={isEcosystemDialogOpen}
+          onClose={() => setIsEcosystemDialogOpen(false)}
         />
       </div>
     )
@@ -127,15 +263,27 @@ export function ProjectList() {
           )}
         </div>
 
-        <button
-          onClick={() => {
-            setEditingProject(null)
-            setIsDialogOpen(true)
-          }}
-          className="btn-primary shrink-0"
-        >
-          + Add Project
-        </button>
+        <span className="text-label-sm text-on-surface-variant shrink-0">
+          {viewMode === 'flat' ? 'Flat' : 'By Ecosystem'}
+        </span>
+
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => setIsEcosystemDialogOpen(true)}
+            className="btn-ghost"
+          >
+            + Add Ecosystem Folder
+          </button>
+          <button
+            onClick={() => {
+              setEditingProject(null)
+              setIsDialogOpen(true)
+            }}
+            className="btn-primary"
+          >
+            + Add Project
+          </button>
+        </div>
       </div>
 
       {/* Project grid */}
@@ -150,19 +298,51 @@ export function ProjectList() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredProjects.map(project => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onEdit={() => handleEdit(project)}
-              onDelete={() => handleDelete(project.id)}
-              onOpenEditor={handleOpenEditor}
-              onLaunchAgent={handleLaunchAgent}
-              onError={handleError}
-            />
-          ))}
-        </div>
+        viewMode === 'flat' ? (
+          renderProjectGrid(filteredProjects)
+        ) : (
+          <div className="space-y-4">
+            {ecosystemGroups.map(group => {
+              const isExpanded = expandedGroups[group.key] ?? true
+              const groupAgent = group.defaultAgent ?? 'opencode'
+              const canOpenAll = group.ecosystemId !== null
+
+              return (
+                <section key={group.key} className="card space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-headline text-secondary">{group.label}</h2>
+                      <p className="text-label-sm text-on-surface-variant mt-1">
+                        {group.projects.length} project{group.projects.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2 shrink-0">
+                      {canOpenAll && (
+                        <button
+                          type="button"
+                          onClick={() => handleLaunchEcosystem(group.ecosystemId!, group.label, groupAgent)}
+                          className="btn-primary"
+                        >
+                          Open All with {groupAgent}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.key)}
+                        className="btn-ghost"
+                      >
+                        {isExpanded ? 'Collapse' : 'Expand'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && renderProjectGrid(group.projects)}
+                </section>
+              )
+            })}
+          </div>
+        )
       )}
 
       <AddProjectDialog
@@ -172,6 +352,11 @@ export function ProjectList() {
           setEditingProject(null)
         }}
         editingProject={editingProject}
+      />
+
+      <AddEcosystemFolderDialog
+        isOpen={isEcosystemDialogOpen}
+        onClose={() => setIsEcosystemDialogOpen(false)}
       />
 
       {deleteConfirm && (

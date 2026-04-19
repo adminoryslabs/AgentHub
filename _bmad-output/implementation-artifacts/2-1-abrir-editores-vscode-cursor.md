@@ -1,6 +1,6 @@
 ---
 story_key: 2-1-abrir-editores-vscode-cursor
-status: review
+status: done
 epic: 2
 epic_title: Acciones Locales — Abrir Herramientas
 ---

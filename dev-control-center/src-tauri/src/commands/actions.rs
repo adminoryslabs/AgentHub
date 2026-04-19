@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::process::Command;
 
+use crate::commands::ecosystems::load_ecosystems;
 use crate::commands::projects::load_projects;
 use crate::logging::log_debug;
 
@@ -245,6 +246,12 @@ pub struct LaunchAgentRequest {
     pub agent: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchEcosystemAgentRequest {
+    pub ecosystem_id: String,
+}
+
 #[tauri::command]
 pub async fn launch_agent(req: LaunchAgentRequest) -> Result<String, String> {
     let platform = detect_platform();
@@ -300,6 +307,54 @@ pub async fn launch_agent(req: LaunchAgentRequest) -> Result<String, String> {
     let _ = update_last_opened(project_id);
 
     Ok(format!("{} launched for {}", req.agent, project.name))
+}
+
+#[tauri::command]
+pub async fn launch_ecosystem_agent(req: LaunchEcosystemAgentRequest) -> Result<String, String> {
+    let platform = detect_platform();
+    log_debug(&format!("[launch_ecosystem_agent] START ecosystem_id={} platform={}", req.ecosystem_id, platform));
+
+    let ecosystem_id = uuid::Uuid::parse_str(&req.ecosystem_id)
+        .map_err(|_| format!("ID inválido: {}", req.ecosystem_id))?;
+    let ecosystems_store = load_ecosystems()?;
+    let ecosystem = ecosystems_store
+        .ecosystems
+        .iter()
+        .find(|ecosystem| ecosystem.id == ecosystem_id)
+        .ok_or_else(|| format!("Ecosistema no encontrado: {}", req.ecosystem_id))?;
+
+    let root_path = ecosystem.root_path.clone();
+    let environment = ecosystem.environment.clone();
+    let agent = resolve_command(&ecosystem.default_agent);
+    log_debug(&format!("[launch_ecosystem_agent] ecosystem={} env={} root={} agent={}", ecosystem.name, environment, root_path, agent));
+
+    let agent_available = if is_windows() && environment == "wsl" {
+        which_wsl(&agent)
+    } else {
+        which(&agent)
+    };
+
+    if !agent_available {
+        let hint = if is_windows() && environment == "wsl" {
+            format!("{} no encontrado en WSL. Instalalo dentro de WSL primero.", agent)
+        } else {
+            format!("{} no encontrado en PATH. Instalalo primero.", agent)
+        };
+        return Err(hint);
+    }
+
+    if !path_exists(&root_path, &environment) {
+        return Err(format!("Ruta no encontrada: {}", root_path));
+    }
+
+    launch_in_terminal(&agent, &root_path, &environment, &format!("Ecosystem: {}", ecosystem.name))?;
+
+    let projects_store = load_projects()?;
+    for project in projects_store.projects.iter().filter(|project| project.ecosystem_id == Some(ecosystem_id)) {
+        let _ = update_last_opened(project.id);
+    }
+
+    Ok(format!("{} launched for ecosystem {}", ecosystem.default_agent, ecosystem.name))
 }
 
 // ============================================================================
@@ -370,6 +425,291 @@ pub async fn resume_agent_session(req: ResumeAgentSessionRequest) -> Result<Stri
 }
 
 // ============================================================================
+// Open Agent Settings
+// ============================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenAgentSettingsRequest {
+    pub agent: String, // "claude", "qwen", "opencode"
+}
+
+/// Get the settings file path for an agent (WSL-style, used on Windows)
+fn get_agent_settings_path(agent: &str) -> Option<String> {
+    match agent {
+        "claude" => Some("~/.claude/settings.json".to_string()),
+        "qwen" => Some("~/.qwen/settings.json".to_string()),
+        "opencode" => Some("~/.opencode/settings.json".to_string()),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+pub async fn open_agent_settings(req: OpenAgentSettingsRequest) -> Result<String, String> {
+    let platform = detect_platform();
+    log_debug(&format!("[open_agent_settings] START agent={} platform={}", req.agent, platform));
+
+    let settings_path = get_agent_settings_path(&req.agent)
+        .ok_or_else(|| format!("Agente no soportado para settings: {}. Soportados: claude, qwen, opencode.", req.agent))?;
+
+    log_debug(&format!("[open_agent_settings] settings path: {}", settings_path));
+
+    // Open in VS Code
+    if is_wsl() {
+        // Inside WSL: direct `code`
+        Command::new("code")
+            .arg(settings_path)
+            .spawn()
+            .map_err(|e| format!("No se pudo abrir VS Code: {}", e))?;
+    } else if is_windows() {
+        // Windows: open settings inside WSL via `wsl code`
+        let cmd = format!("code {}", settings_path);
+        Command::new("wt.exe")
+            .arg("new-tab")
+            .arg("--title")
+            .arg(format!("{} Settings", req.agent))
+            .arg("wsl")
+            .arg("bash")
+            .arg("-ic")
+            .arg(&cmd)
+            .spawn()
+            .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal.", e))?;
+    } else if is_macos() {
+        Command::new("code")
+            .arg(settings_path)
+            .spawn()
+            .map_err(|e| format!("No se pudo abrir VS Code: {}", e))?;
+    } else {
+        // Linux native
+        Command::new("code")
+            .arg(settings_path)
+            .spawn()
+            .map_err(|e| format!("No se pudo abrir VS Code: {}", e))?;
+    }
+
+    Ok(format!("Settings for {} opened", req.agent))
+}
+
+// ============================================================================
+// Open Global Terminal (top bar — no project)
+// ============================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenGlobalTerminalRequest {
+    pub shell: String, // "wsl" or "powershell"
+}
+
+#[tauri::command]
+pub async fn open_global_terminal(req: OpenGlobalTerminalRequest) -> Result<String, String> {
+    let platform = detect_platform();
+    log_debug(&format!("[open_global_terminal] START shell={} platform={}", req.shell, platform));
+
+    if is_wsl() {
+        // Already inside WSL — just open bash at home
+        Command::new("wt.exe")
+            .arg("--title")
+            .arg("Dev Control Center")
+            .arg("--")
+            .arg("bash")
+            .arg("-ic")
+            .arg("cd ~ && exec bash")
+            .spawn()
+            .map_err(|e| format!("wt.exe failed: {}", e))?;
+        return Ok("WSL terminal opened at ~".to_string());
+    }
+
+    if is_windows() {
+        if req.shell == "wsl" {
+            Command::new("wt.exe")
+                .arg("new-tab")
+                .arg("--title")
+                .arg("Dev Control Center — WSL")
+                .arg("wsl")
+                .arg("bash")
+                .arg("-ic")
+                .arg("cd ~ && exec bash")
+                .spawn()
+                .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal.", e))?;
+        } else if req.shell == "powershell" {
+            let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\".to_string());
+            Command::new("wt.exe")
+                .arg("new-tab")
+                .arg("--title")
+                .arg("Dev Control Center — PowerShell")
+                .arg("--startingDirectory")
+                .arg(&home)
+                .arg("pwsh")
+                .arg("-NoExit")
+                .spawn()
+                .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal.", e))?;
+        } else {
+            return Err(format!("Shell no soportado: {}. Usá 'wsl' o 'powershell'.", req.shell));
+        }
+        return Ok(format!("{} terminal opened", req.shell));
+    }
+
+    if is_macos() {
+        let script = r#"tell application "Terminal" to do script "cd ~ && exec bash""#;
+        Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .spawn()
+            .map_err(|e| format!("osascript failed: {}", e))?;
+        return Ok("Terminal opened at ~".to_string());
+    }
+
+    // Linux native
+    let full_cmd = "cd ~ && exec bash";
+    for terminal in &["gnome-terminal", "x-terminal-emulator", "konsole", "xterm"] {
+        if which(terminal) {
+            match *terminal {
+                "gnome-terminal" => Command::new("gnome-terminal")
+                    .arg("--")
+                    .arg("bash")
+                    .arg("-c")
+                    .arg(full_cmd)
+                    .spawn(),
+                "konsole" => Command::new("konsole")
+                    .arg("-e")
+                    .arg("bash")
+                    .arg("-c")
+                    .arg(full_cmd)
+                    .spawn(),
+                _ => Command::new(terminal)
+                    .arg("-e")
+                    .arg(format!("bash -c '{}'", full_cmd))
+                    .spawn(),
+            }.map_err(|e| format!("{} failed: {}", terminal, e))?;
+            return Ok(format!("{} terminal opened at ~", terminal));
+        }
+    }
+    Err("No terminal emulator found.".to_string())
+}
+
+// ============================================================================
+// Open Terminal (per project)
+// ============================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenTerminalRequest {
+    pub project_id: String,
+}
+
+#[tauri::command]
+pub async fn open_terminal(req: OpenTerminalRequest) -> Result<String, String> {
+    let platform = detect_platform();
+    log_debug(&format!("[open_terminal] START platform={}", platform));
+
+    let store = load_projects()?;
+    let project_id = uuid::Uuid::parse_str(&req.project_id)
+        .map_err(|_| format!("ID inválido: {}", req.project_id))?;
+
+    let project = store
+        .projects
+        .iter()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Proyecto no encontrado: {}", req.project_id))?;
+
+    log_debug(&format!("[open_terminal] project={} env={} path={}", project.name, project.environment, project.path));
+
+    // Validar que la ruta del proyecto existe
+    if !path_exists(&project.path, &project.environment) {
+        return Err(format!("Ruta no encontrada: {}", project.path));
+    }
+
+    let title = project.name.clone();
+    let path = project.path.clone();
+    let env = project.environment.clone();
+
+    log_debug(&format!("[open_terminal] opening terminal: title='{}' path='{}' env='{}'", title, path, env));
+
+    if is_wsl() {
+        // Dentro de WSL: abrir nueva pestaña en Windows Terminal con bash -ic para cargar .bashrc
+        Command::new("wt.exe")
+            .arg("new-tab")
+            .arg("--title")
+            .arg(&title)
+            .arg("--")
+            .arg("bash")
+            .arg("-ic")
+            .arg(format!("cd '{}' && exec bash", path))
+            .spawn()
+            .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal instalado.", e))?;
+    } else if is_windows() && env == "wsl" {
+        // Windows nativo, proyecto en WSL
+        Command::new("wt.exe")
+            .arg("new-tab")
+            .arg("--title")
+            .arg(&title)
+            .arg("wsl")
+            .arg("bash")
+            .arg("-ic")
+            .arg(format!("cd '{}' && exec bash", path))
+            .spawn()
+            .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal instalado.", e))?;
+    } else if is_windows() {
+        // Windows nativo, proyecto también en Windows
+        let win_path = path.replace('/', "\\");
+        Command::new("wt.exe")
+            .arg("new-tab")
+            .arg("--title")
+            .arg(&title)
+            .arg("--startingDirectory")
+            .arg(&win_path)
+            .arg("pwsh")
+            .arg("-NoExit")
+            .spawn()
+            .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal instalado.", e))?;
+    } else if is_macos() {
+        let script = format!(
+            "tell application \"Terminal\" to do script \"cd '{}' && exec bash\"",
+            path
+        );
+        Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .spawn()
+            .map_err(|e| format!("osascript failed: {}", e))?;
+    } else {
+        // Linux nativo
+        let full_cmd = format!("cd '{}' && exec bash", path);
+        let mut launched = false;
+        for terminal in &["gnome-terminal", "x-terminal-emulator", "konsole", "xterm"] {
+            if which(terminal) {
+                match *terminal {
+                    "gnome-terminal" => Command::new("gnome-terminal")
+                        .arg("--")
+                        .arg("bash")
+                        .arg("-c")
+                        .arg(&full_cmd)
+                        .spawn(),
+                    "konsole" => Command::new("konsole")
+                        .arg("-e")
+                        .arg("bash")
+                        .arg("-c")
+                        .arg(&full_cmd)
+                        .spawn(),
+                    _ => Command::new(terminal)
+                        .arg("-e")
+                        .arg(format!("bash -c '{}'", full_cmd))
+                        .spawn(),
+                }.map_err(|e| format!("{} failed: {}", terminal, e))?;
+                launched = true;
+                break;
+            }
+        }
+        if !launched {
+            return Err("No terminal emulator found. Install gnome-terminal, xterm, or similar.".to_string());
+        }
+    }
+
+    let _ = update_last_opened(project_id);
+    Ok(format!("Terminal opened for {}", project.name))
+}
+
+// ============================================================================
 // Utility
 // ============================================================================
 
@@ -385,6 +725,7 @@ fn update_last_opened(project_id: uuid::Uuid) -> Result<(), String> {
     project.last_opened_at = Some(chrono::Utc::now());
     crate::commands::projects::save_projects(&store)
 }
+
 
 /// Launch an editor on Windows, handling .cmd/.bat wrappers.
 fn launch_windows_editor(editor: &str, path: &str) -> Result<std::process::Child, std::io::Error> {

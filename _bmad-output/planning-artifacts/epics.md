@@ -14,6 +14,25 @@ inputDocuments:
 
 Este documento contiene la descomposición completa de epics y stories para **Dev Control Center**, una aplicación de escritorio Tauri v2 que centraliza gestión de proyectos, ejecución de agentes de IA y contexto de trabajo para 2 usuarios (multi-máquina: Windows, WSL, Mac) con memorias compartidas vía Neon PostgreSQL.
 
+## Estado Actual
+
+Estado documental reconciliado contra el código actual y `implementation-artifacts` al 2026-04-18.
+
+| Epic | Estado actual | Nota |
+|------|---------------|------|
+| Epic 1 | Done | Documentado en implementation artifacts |
+| Epic 2 | Done | Incluye 2.3 aunque faltaba artifact dedicado |
+| Epic 3 | Done | 3.1 y 3.2 estaban implementados pero el artifact seguia incompleto |
+| Epic 4 | Done | Faltaban artifacts 4.x |
+| Epic 5 | Done con notas | Existe implementacion; discovery real cubre Claude/Qwen y no evidencia completa de OpenCode |
+| Epic 6 | In progress | 6.1-6.4 implementados, 6.5 sigue en backlog |
+| Epic 7 | Backlog | Sin implementacion encontrada |
+| Epic 8 | Backlog | Sin implementacion encontrada |
+| Continue Work (Neon) | Blocked / deprecated candidate | Sigue dependiendo de Neon |
+| Dashboard con estado (Neon) | Blocked / deprecated candidate | Sigue dependiendo de Neon |
+
+> Nota: los epics 4-8 reflejan la evolucion real del producto despues del plan inicial. Los epics dependientes de Neon permanecen fuera del flujo activo y hoy se consideran bloqueados, con alta probabilidad de quedar deprecados.
+
 ## Requirements Inventory
 
 ### Functional Requirements
@@ -523,3 +542,276 @@ So that I can continue working in that conversation context.
 **FRs:** FR17
 **Estado:** 🟡 **Blocked** — depende de datos en Neon
 **Stories originales:** Status Cards con Datos de Neon, StatusBar Global
+
+---
+
+## 🆕 Epics Nuevos (Backlog para desarrollo futuro)
+
+## Epic 6: Quick Wins
+
+**Objetivo:** Mejoras rápidas de alta utilidad diaria con bajo esfuerzo de implementación.
+
+### Story 6.1: Botón de terminal por proyecto
+
+As a user,
+I want to open a terminal in my project directory with one click,
+So that I can run ad-hoc commands without manual navigation.
+
+**Acceptance Criteria:**
+
+**Given** un proyecto con `env: "wsl"`
+**When** el usuario hace clic en "Terminal WSL"
+**Then** se abre un terminal de Windows Terminal ejecutando `wsl bash -ic "cd '/path'"`
+**And** el terminal queda en el directorio del proyecto listo para usar
+
+**Given** un proyecto con `env: "windows"`
+**When** el usuario hace clic en "Terminal PowerShell"
+**Then** se abre un terminal de Windows Terminal ejecutando `pwsh -NoExit -Command "cd 'D:\path'"`
+
+### Story 6.2: Botón de terminal general
+
+As a user,
+I want to quickly open a WSL or PowerShell terminal from the app,
+So that I can run commands without switching contexts manually.
+
+**Acceptance Criteria:**
+
+**Given** la app abierta
+**When** el usuario hace clic en "Terminal WSL" en la barra superior
+**Then** se abre Windows Terminal en WSL en el home directory (`~`)
+
+**Given** la app abierta
+**When** el usuario hace clic en "Terminal PS" en la barra superior
+**Then** se abre Windows Terminal en PowerShell en el home directory de Windows
+
+### Story 6.3: Abrir settings del agente
+
+As a user,
+I want to open the agent's settings file directly from the project card,
+So that I can quickly edit Claude/Qwen/OpenCode configurations.
+
+**Acceptance Criteria:**
+
+**Given** un proyecto con `env: "wsl"`
+**When** el usuario hace clic en "Settings Claude"
+**Then** se abre VS Code en WSL con `~/.claude/settings.json`
+
+**Given** un proyecto con `env: "wsl"`
+**When** el usuario hace clic en "Settings Qwen"
+**Then** se abre VS Code en WSL con `~/.qwen/settings.json`
+
+**Given** un proyecto con sesiones de agentes
+**When** el usuario expande las sesiones
+**Then** se muestra un botón/link para abrir el settings del agente correspondiente
+
+### Story 6.4: File picker para Add Project
+
+As a user,
+I want to select a folder using a native file dialog instead of typing the path,
+So that I can add projects faster and avoid typos.
+
+**Acceptance Criteria:**
+
+**Given** el usuario hace clic en "+ Add Project"
+**When** se abre el dialog
+**Then** muestra un campo de ruta editable Y un botón "Browse" con ícono de carpeta
+
+**Given** el usuario hace clic en "Browse"
+**When** se abre el file picker nativo de Windows (o WSL)
+**Then** al seleccionar una carpeta, el campo de ruta se auto-completa con la ruta seleccionada
+
+### Story 6.5: Crear proyecto desde cero
+
+As a user,
+I want to create a new project directory and register it simultaneously,
+So that I don't have to manually create folders before adding projects.
+
+**Acceptance Criteria:**
+
+**Given** el dialog de Add Project
+**When** el usuario hace clic en "Create New Project"
+**Then** se abre un dialog para seleccionar la ubicación padre y el nombre del proyecto
+**And** se crea la carpeta en el filesystem
+**And** se registra automáticamente en `projects.json`
+
+---
+
+## Epic 7: Bloc de Notas
+
+**Objetivo:** El usuario puede tomar notas rápidas por proyecto y una nota general, accesible desde la app.
+
+### Story 7.1: Persistencia de notas en Rust
+
+As a user,
+I want my notes to be saved locally and persist between app restarts,
+So that I don't lose my thoughts.
+
+**Acceptance Criteria:**
+
+**Given** el sistema de notas
+**When** el usuario guarda una nota para un proyecto
+**Then** se guarda en `~/.dev-control-center/notes/<project-id>.md`
+
+**Given** el sistema de notas generales
+**When** el usuario guarda una nota general
+**Then** se guarda en `~/.dev-control-center/notes/_general.md`
+
+**Given** notas existentes
+**When** la app se abre
+**Then** las notas se cargan automáticamente desde el filesystem
+
+### Story 7.2: UI del bloc de notas por proyecto
+
+As a user,
+I want to access a notepad for each project from the project card,
+So that I can jot down quick thoughts about that project.
+
+**Acceptance Criteria:**
+
+**Given** un ProjectCard
+**When** el usuario expande el card o hace clic en "Notes"
+**Then** se abre un panel lateral o modal con un editor de texto simple
+
+**Given** el editor de notas abierto
+**When** el usuario escribe y presiona Ctrl+S o hace clic en "Save"
+**Then** la nota se guarda y se muestra "Saved" brevemente
+
+**Given** una nota vacía
+**When** el usuario abre el bloc de notas
+**Then** muestra un placeholder "No notes yet — start typing..."
+
+### Story 7.3: UI del bloc de notas general
+
+As a user,
+I want a general-purpose notepad accessible from the app's top bar,
+So that I can capture ideas that aren't tied to a specific project.
+
+**Acceptance Criteria:**
+
+**Given** la barra superior
+**When** el usuario hace clic en "Notes" o un ícono de bloc
+**Then** se abre un panel/modal con la nota general (`_general.md`)
+
+**Given** el editor general abierto
+**When** el usuario guarda
+**Then** se guarda en `~/.dev-control-center/notes/_general.md`
+
+---
+
+## Epic 8: Ecosistemas (Padre/Hijos)
+
+**Objetivo:** El usuario puede registrar ecosistemas como carpetas root reales, importar sus proyectos hijos, alternar entre vista plana y vista por ecosistemas, y abrir una sola sesion de agente en la carpeta root del ecosistema para trabajar a nivel cross-project.
+
+### Story 8.1: Entidad de ecosistema y relacion con proyectos
+
+As a user,
+I want ecosystems to have their own configuration,
+So that root path, agent defaults, and grouping do not depend on arbitrary projects.
+
+**Acceptance Criteria:**
+
+**Given** la persistencia local de la app
+**When** un ecosistema existe
+**Then** se guarda como entidad propia con al menos `id`, `name`, `rootPath`, `defaultAgent` y `environment`
+
+**Given** un proyecto registrado
+**When** pertenece a un ecosistema
+**Then** referencia al ecosistema por `ecosystemId` o equivalente estable, no por datos derivados del proyecto
+
+**Given** que estamos en fase de testing
+**When** se introduce el nuevo modelo
+**Then** no es obligatorio mantener compatibilidad con el modelo provisional anterior
+
+### Story 8.2: Toggle de vista por ecosistemas
+
+As a user,
+I want to toggle between a flat list and an ecosystem-grouped view,
+So that I can see projects organized or uncluttered depending on my needs.
+
+**Acceptance Criteria:**
+
+**Given** la barra superior
+**When** el usuario hace clic en un toggle "By Ecosystem" / "Flat"
+**Then** la vista cambia entre:
+- **Flat:** lista plana de todos los proyectos (comportamiento actual)
+- **By Ecosystem:** secciones colapsables por ecosistema
+
+**Given** la vista por ecosistemas
+**When** el usuario expande un ecosistema
+**Then** muestra los proyectos de ese ecosistema como cards normales
+
+**Given** la vista por ecosistemas
+**When** un proyecto no tiene ecosistema
+**Then** aparece en una sección "Ungrouped"
+
+**Given** la vista por ecosistemas
+**When** la app agrupa proyectos
+**Then** usa la entidad `Ecosystem` como fuente de verdad, no campos derivados desde `projects.json`
+
+### Story 8.3: Abrir ecosistema completo en agente
+
+As a user,
+I want to launch an agent at the ecosystem root directory,
+So that I can work on cross-project implementations.
+
+**Acceptance Criteria:**
+
+**Given** un ecosistema expandido en la vista por ecosistemas
+**When** el usuario hace clic en "Open All" o similar
+**Then** se abre una sola sesion del agente en `rootPath` del ecosistema
+
+**Given** el usuario define un ecosistema
+**When** configura el ecosistema
+**Then** puede definir su agente por defecto para `Open All`
+
+**Given** un ecosistema configurado
+**When** el usuario usa `Open All`
+**Then** no se abre una sesion por cada proyecto hijo
+
+### Story 8.4: Crear ecosistema desde carpeta e importar proyectos hijos
+
+As a user,
+I want to register an ecosystem folder and import its child projects,
+So that I can onboard a whole workspace quickly.
+
+**Acceptance Criteria:**
+
+**Given** el flujo de alta
+**When** el usuario elige "Add Ecosystem Folder"
+**Then** puede introducir `name`, `rootPath`, `environment` y `defaultAgent`
+
+**Given** una carpeta root valida
+**When** la app la escanea
+**Then** detecta las subcarpetas directas candidatas a proyecto
+
+**Given** el resultado del escaneo
+**When** el usuario confirma la importacion
+**Then** puede seleccionar que subcarpetas se registran como proyectos hijos del ecosistema
+
+**Given** una subcarpeta ya registrada como proyecto
+**When** forma parte del escaneo
+**Then** la app evita duplicados y muestra el conflicto de forma clara
+
+### Story 8.5: Gestion manual de ecosistemas
+
+As a user,
+I want to create, edit, and delete ecosystems manually,
+So that I can manage grouping and ecosystem metadata even without reimporting folders.
+
+**Acceptance Criteria:**
+
+**Given** la barra superior o un menú de gestión
+**When** el usuario hace clic en "Manage Ecosystems"
+**Then** se abre un dialog con la lista de ecosistemas existentes y sus proyectos
+
+**Given** el dialog de ecosistemas
+**When** el usuario edita un ecosistema
+**Then** puede cambiar `name`, `rootPath` y `defaultAgent`
+
+**Given** el dialog de ecosistemas
+**When** el usuario asigna proyectos existentes a un ecosistema
+**Then** puede hacerlo con checkboxes o una interacción equivalente simple
+
+**Given** el dialog de ecosistemas
+**When** el usuario elimina un ecosistema
+**Then** los proyectos quedan como "Ungrouped" y no se eliminan
