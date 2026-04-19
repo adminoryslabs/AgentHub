@@ -43,6 +43,37 @@ fn run_wslpath(flag: &str, path: &str) -> Result<String, String> {
     Ok(value)
 }
 
+fn try_convert_windows_wsl_path(path: &str) -> Option<String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let normalized = trimmed.replace('/', "\\");
+
+    let without_drive = if normalized.len() > 2 && normalized.as_bytes()[1] == b':' {
+        &normalized[2..]
+    } else {
+        normalized.as_str()
+    };
+
+    let without_prefix = without_drive
+        .strip_prefix(r"\\wsl.localhost\")
+        .or_else(|| without_drive.strip_prefix(r"\\wsl$\"))
+        .or_else(|| without_drive.strip_prefix(r"\wsl.localhost\"))
+        .or_else(|| without_drive.strip_prefix(r"\wsl$\"))?;
+
+    let mut segments = without_prefix.split('\\').filter(|segment| !segment.is_empty());
+    segments.next()?;
+
+    let remainder: Vec<&str> = segments.collect();
+    if remainder.is_empty() {
+        return Some("/".to_string());
+    }
+
+    Some(format!("/{}", remainder.join("/")))
+}
+
 pub(crate) fn normalize_path_for_comparison(path: &str, environment: &str) -> String {
     let separator = if environment == "windows" { '\\' } else { '/' };
     let mut normalized = path.trim().replace(['/', '\\'], &separator.to_string());
@@ -67,6 +98,10 @@ pub(crate) fn normalize_path_for_storage(path: &str, environment: &str) -> Resul
     if environment == "wsl" {
         if trimmed.starts_with("/") {
             return Ok(normalize_path_for_comparison(trimmed, environment));
+        }
+
+        if let Some(converted) = try_convert_windows_wsl_path(trimmed) {
+            return Ok(normalize_path_for_comparison(&converted, environment));
         }
 
         if is_windows_host() {
