@@ -40,6 +40,7 @@ pub fn run() {
             commands::actions::launch_agent,
             commands::actions::launch_ecosystem_agent,
             commands::actions::resume_agent_session,
+            commands::actions::resume_ecosystem_agent_session,
             commands::actions::open_terminal,
             commands::actions::open_global_terminal,
             commands::actions::open_agent_settings,

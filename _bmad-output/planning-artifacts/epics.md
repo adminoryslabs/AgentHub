@@ -493,6 +493,8 @@ So that I can see my conversation history without manual configuration.
 
 ### Story 5.2: Mostrar lista de sesiones expandible en ProjectCard
 
+**Estado:** Done
+
 As a user,
 I want to see agent sessions grouped by agent in an expandable section of each project card,
 So that I can understand my work patterns across different agents.
@@ -505,6 +507,11 @@ So that I can understand my work patterns across different agents.
 **And** cada sesión muestra: nombre, fecha relativa ("hace 2 horas"), tamaño
 **And** las sesiones se ordenan por fecha modificada (más reciente primero)
 **And** si no hay sesiones muestra "No agent sessions found"
+
+**Given** un ecosistema configurado con `rootPath`
+**When** el usuario expande la sección de sesiones del ecosistema
+**Then** puede ver el historial detectado en la carpeta root del ecosistema
+**And** puede reabrir sesiones desde ese contexto cross-project
 
 ### Story 5.3: Reabrir sesión de agente
 

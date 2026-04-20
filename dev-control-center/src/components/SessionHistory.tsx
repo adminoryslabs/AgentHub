@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react'
-import { getSessions, resumeAgentSession, type SessionEntry } from '../lib/invoke'
+import {
+  getSessions,
+  resumeAgentSession,
+  resumeEcosystemAgentSession,
+  type SessionEntry,
+} from '../lib/invoke'
 import { useUI } from '../contexts/UIContext'
 
 interface SessionHistoryProps {
   projectPath: string
-  projectId: string
+  projectId?: string
+  ecosystemId?: string
+  label?: string
 }
 
 function formatDateRelative(isoString: string): string {
@@ -39,7 +46,7 @@ const AGENT_COLORS: Record<string, string> = {
   opencode: 'text-[#f97316]',
 }
 
-export function SessionHistory({ projectPath, projectId }: SessionHistoryProps) {
+export function SessionHistory({ projectPath, projectId, ecosystemId, label = 'Sessions' }: SessionHistoryProps) {
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -58,7 +65,13 @@ export function SessionHistory({ projectPath, projectId }: SessionHistoryProps) 
 
   const handleOpenSession = async (session: SessionEntry) => {
     try {
-      await resumeAgentSession(projectId, session.agent, session.sessionId)
+      if (ecosystemId) {
+        await resumeEcosystemAgentSession(ecosystemId, session.agent, session.sessionId)
+      } else if (projectId) {
+        await resumeAgentSession(projectId, session.agent, session.sessionId)
+      } else {
+        throw new Error('No session target configured')
+      }
       addToast(
         `${AGENT_LABELS[session.agent] || session.agent} session opened`,
         'success'
@@ -74,7 +87,7 @@ export function SessionHistory({ projectPath, projectId }: SessionHistoryProps) 
         onClick={() => setIsExpanded(true)}
         className="w-full text-left text-label-sm text-outline hover:text-secondary transition-colors py-1"
       >
-        ▸ Sessions
+        ▸ {label}
       </button>
     )
   }
@@ -85,7 +98,7 @@ export function SessionHistory({ projectPath, projectId }: SessionHistoryProps) 
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full text-left text-label-sm text-outline hover:text-secondary transition-colors flex items-center justify-between"
       >
-        <span>Sessions ({sessions.length})</span>
+          <span>{label} ({sessions.length})</span>
         <span>{isExpanded ? '▾' : '▸'}</span>
       </button>
 

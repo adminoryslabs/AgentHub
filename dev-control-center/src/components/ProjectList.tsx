@@ -5,6 +5,7 @@ import { useUI } from '../contexts/UIContext'
 import { ProjectCard } from './ProjectCard'
 import { AddProjectDialog } from './AddProjectDialog'
 import { AddEcosystemFolderDialog } from './AddEcosystemFolderDialog'
+import { SessionHistory } from './SessionHistory'
 import { getEcosystems, launchEcosystemAgent, type Ecosystem, type Project } from '../lib/invoke'
 
 interface ProjectListProps {
@@ -16,6 +17,7 @@ type EcosystemGroup = {
   label: string
   ecosystemId: string | null
   defaultAgent: string | null
+  rootPath: string | null
   projects: Project[]
 }
 
@@ -128,13 +130,14 @@ export function ProjectList({ viewMode }: ProjectListProps) {
         continue
       }
 
-      groups.set(key, {
-        key,
-        label,
-        ecosystemId: ecosystem?.id ?? null,
-        defaultAgent: ecosystem?.defaultAgent ?? null,
-        projects: [project],
-      })
+        groups.set(key, {
+          key,
+          label,
+          ecosystemId: ecosystem?.id ?? null,
+          defaultAgent: ecosystem?.defaultAgent ?? null,
+          rootPath: ecosystem?.rootPath ?? null,
+          projects: [project],
+        })
     }
 
     return Array.from(groups.values()).sort((a, b) => {
@@ -315,6 +318,11 @@ export function ProjectList({ viewMode }: ProjectListProps) {
                       <p className="text-label-sm text-on-surface-variant mt-1">
                         {group.projects.length} project{group.projects.length !== 1 ? 's' : ''}
                       </p>
+                      {group.rootPath && (
+                        <p className="text-label-sm text-outline font-mono mt-1 break-all">
+                          {group.rootPath}
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex gap-2 shrink-0">
@@ -336,6 +344,14 @@ export function ProjectList({ viewMode }: ProjectListProps) {
                       </button>
                     </div>
                   </div>
+
+                  {canOpenAll && group.rootPath && (
+                    <SessionHistory
+                      projectPath={group.rootPath}
+                      ecosystemId={group.ecosystemId!}
+                      label="Ecosystem Sessions"
+                    />
+                  )}
 
                   {isExpanded && renderProjectGrid(group.projects)}
                 </section>

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::SystemTime;
 
+use crate::commands::projects::normalize_path_for_storage;
 use crate::logging::log_debug;
 
 #[derive(Debug, Clone, Serialize)]
@@ -68,6 +69,20 @@ fn encode_project_path(path: &str) -> String {
     encoded
 }
 
+fn normalize_lookup_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if is_wsl_path(trimmed) {
+        return normalize_path_for_storage(trimmed, "wsl")
+            .unwrap_or_else(|_| trimmed.to_string());
+    }
+
+    trimmed.to_string()
+}
+
 fn build_session_entry(agent: &str, candidate: SessionCandidate) -> Option<SessionEntry> {
     let title = derive_session_title(agent, &candidate)?;
 
@@ -82,12 +97,16 @@ fn build_session_entry(agent: &str, candidate: SessionCandidate) -> Option<Sessi
 
 #[tauri::command]
 pub async fn get_sessions(req: GetSessionsRequest) -> Result<Vec<SessionEntry>, String> {
-    log_debug(&format!("[sessions] get_sessions for path='{}'", req.project_path));
+    let lookup_path = normalize_lookup_path(&req.project_path);
+    log_debug(&format!(
+        "[sessions] get_sessions for path='{}' normalized='{}'",
+        req.project_path, lookup_path
+    ));
 
     let mut sessions = Vec::new();
 
     // Discover Claude sessions
-    match discover_claude_sessions(&req.project_path) {
+    match discover_claude_sessions(&lookup_path) {
         Ok(claude) => {
             log_debug(&format!("[sessions] claude sessions found: {}", claude.len()));
             sessions.extend(claude);
@@ -96,7 +115,7 @@ pub async fn get_sessions(req: GetSessionsRequest) -> Result<Vec<SessionEntry>, 
     }
 
     // Discover Qwen sessions
-    match discover_qwen_sessions(&req.project_path) {
+    match discover_qwen_sessions(&lookup_path) {
         Ok(qwen) => {
             log_debug(&format!("[sessions] qwen sessions found: {}", qwen.len()));
             sessions.extend(qwen);
@@ -477,7 +496,12 @@ fn is_windows() -> bool {
 }
 
 fn is_wsl_path(path: &str) -> bool {
-    path.starts_with("/home/") || path.starts_with("/mnt/")
+    path.starts_with("/home/")
+        || path.starts_with("/mnt/")
+        || path.starts_with(r"\\wsl.localhost\")
+        || path.starts_with(r"\\wsl$\")
+        || path.starts_with(r"\wsl.localhost\")
+        || path.starts_with(r"\wsl$\")
 }
 
 fn whoami() -> String {

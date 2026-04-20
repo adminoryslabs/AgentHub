@@ -165,6 +165,16 @@ export async function resumeAgentSession(
   })
 }
 
+export async function resumeEcosystemAgentSession(
+  ecosystemId: string,
+  agent: string,
+  sessionId: string,
+): Promise<string> {
+  return invoke<string>('resume_ecosystem_agent_session', {
+    req: { ecosystemId, agent, sessionId },
+  })
+}
+
 export async function openTerminal(projectId: string): Promise<string> {
   return invoke<string>('open_terminal', { req: { projectId } })
 }

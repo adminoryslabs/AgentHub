@@ -369,6 +369,14 @@ pub struct ResumeAgentSessionRequest {
     pub session_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumeEcosystemAgentSessionRequest {
+    pub ecosystem_id: String,
+    pub agent: String,
+    pub session_id: String,
+}
+
 #[tauri::command]
 pub async fn resume_agent_session(req: ResumeAgentSessionRequest) -> Result<String, String> {
     let platform = detect_platform();
@@ -422,6 +430,72 @@ pub async fn resume_agent_session(req: ResumeAgentSessionRequest) -> Result<Stri
     let _ = update_last_opened(project_id);
 
     Ok(format!("{} session {} resumed for {}", req.agent, &session_id[..8], project.name))
+}
+
+#[tauri::command]
+pub async fn resume_ecosystem_agent_session(req: ResumeEcosystemAgentSessionRequest) -> Result<String, String> {
+    let platform = detect_platform();
+    log_debug(&format!(
+        "[resume_ecosystem_session] START agent={} session={} platform={}",
+        req.agent, req.session_id, platform
+    ));
+
+    let ecosystem_id = uuid::Uuid::parse_str(&req.ecosystem_id)
+        .map_err(|_| format!("ID inválido: {}", req.ecosystem_id))?;
+    let ecosystems_store = load_ecosystems()?;
+    let ecosystem = ecosystems_store
+        .ecosystems
+        .iter()
+        .find(|ecosystem| ecosystem.id == ecosystem_id)
+        .ok_or_else(|| format!("Ecosistema no encontrado: {}", req.ecosystem_id))?;
+
+    let agent = &req.agent;
+    let session_id = &req.session_id;
+
+    let agent_available = if is_windows() && ecosystem.environment == "wsl" {
+        which_wsl(agent)
+    } else {
+        which(agent)
+    };
+
+    if !agent_available {
+        let hint = if is_windows() && ecosystem.environment == "wsl" {
+            format!("{} no encontrado en WSL. Instalalo dentro de WSL primero.", agent)
+        } else {
+            format!("{} no encontrado en PATH. Instalalo primero.", agent)
+        };
+        return Err(hint);
+    }
+
+    let resume_flag = if agent == "claude" { "-r" } else { "--resume" };
+    let resume_cmd = format!("{} {} {}", agent, resume_flag, session_id);
+
+    if !path_exists(&ecosystem.root_path, &ecosystem.environment) {
+        return Err(format!("Ruta no encontrada: {}", ecosystem.root_path));
+    }
+
+    launch_in_terminal(
+        &resume_cmd,
+        &ecosystem.root_path,
+        &ecosystem.environment,
+        &format!("Ecosystem: {}", ecosystem.name),
+    )?;
+
+    let projects_store = load_projects()?;
+    for project in projects_store
+        .projects
+        .iter()
+        .filter(|project| project.ecosystem_id == Some(ecosystem_id))
+    {
+        let _ = update_last_opened(project.id);
+    }
+
+    Ok(format!(
+        "{} session {} resumed for ecosystem {}",
+        req.agent,
+        &session_id[..8],
+        ecosystem.name
+    ))
 }
 
 // ============================================================================
