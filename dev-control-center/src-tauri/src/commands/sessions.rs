@@ -267,6 +267,10 @@ fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String
 }
 
 fn discover_opencode_sessions(project_path: &str) -> Result<Vec<SessionEntry>, String> {
+    if is_windows() && is_wsl_path(project_path) {
+        return discover_opencode_sessions_wsl(project_path);
+    }
+
     let db_path = opencode_db_path(project_path)?;
     if !std::path::Path::new(&db_path).exists() {
         return Ok(Vec::new());
@@ -317,6 +321,81 @@ fn discover_opencode_sessions(project_path: &str) -> Result<Vec<SessionEntry>, S
             session.title = title;
             sessions.push(session);
         }
+    }
+
+    Ok(sessions)
+}
+
+fn discover_opencode_sessions_wsl(project_path: &str) -> Result<Vec<SessionEntry>, String> {
+    let username = whoami();
+    let db_path = format!("/home/{}/.local/share/opencode/opencode.db", username);
+    let script = r#"
+import json
+import sqlite3
+import sys
+
+db_path = sys.argv[1]
+project_path = sys.argv[2]
+
+conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
+cur = conn.cursor()
+rows = cur.execute('''
+    SELECT s.id, s.title, s.time_updated
+    FROM session s
+    JOIN project p ON p.id = s.project_id
+    WHERE s.time_archived IS NULL
+      AND (p.worktree = ? OR s.directory = ?)
+    ORDER BY s.time_updated DESC
+''', (project_path, project_path)).fetchall()
+
+for session_id, title, time_updated in rows:
+    print(json.dumps({
+        'id': session_id,
+        'title': title,
+        'time_updated': time_updated,
+    }, ensure_ascii=False))
+"#;
+
+    let output = hidden_command("wsl")
+        .args(["python3", "-c", script, &db_path, project_path])
+        .output()
+        .map_err(|e| format!("No se pudo consultar sesiones de OpenCode en WSL: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "Consulta OpenCode WSL falló".to_string()
+        } else {
+            stderr
+        });
+    }
+
+    let mut sessions = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+
+        let Some(session_id) = value.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(title_raw) = value.get("title").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(updated_ms) = value.get("time_updated").and_then(Value::as_i64) else {
+            continue;
+        };
+        let Some(title) = normalize_session_title(title_raw.to_string()) else {
+            continue;
+        };
+
+        sessions.push(SessionEntry {
+            agent: "opencode".to_string(),
+            session_id: session_id.to_string(),
+            title,
+            modified_at: format_unix_millis(updated_ms),
+            size_bytes: 0,
+        });
     }
 
     Ok(sessions)
