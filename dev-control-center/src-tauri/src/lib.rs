@@ -7,6 +7,7 @@ pub mod commands {
 }
 
 pub mod logging;
+pub mod process;
 pub mod models {
     pub mod ecosystem;
     pub mod project;

@@ -4,6 +4,7 @@ use std::process::Command;
 use crate::commands::ecosystems::load_ecosystems;
 use crate::commands::projects::load_projects;
 use crate::logging::log_debug;
+use crate::process::hidden_command;
 
 // ============================================================================
 // Environment Detection
@@ -57,7 +58,7 @@ fn which(cmd: &str) -> bool {
             format!("{}.exe", cmd),
         ];
         for v in &variants {
-            let found = Command::new("where")
+            let found = hidden_command("where")
                 .arg(v)
                 .output()
                 .map(|o| o.status.success())
@@ -72,7 +73,7 @@ fn which(cmd: &str) -> bool {
         log_debug(&format!("[which] {} -> NOT FOUND", cmd));
         false
     } else {
-        let found = Command::new("which")
+        let found = hidden_command("which")
             .arg(cmd)
             .output()
             .map(|o| o.status.success())
@@ -87,7 +88,7 @@ fn which(cmd: &str) -> bool {
 fn which_wsl(cmd: &str) -> bool {
     // Use bash -ic to load .bashrc and nvm
     let which_cmd = format!("which {}", cmd);
-    let output = Command::new("wsl")
+    let output = hidden_command("wsl")
         .args(["bash", "-ic", &which_cmd])
         .output();
     let found = output.as_ref().map(|o| o.status.success()).unwrap_or(false);
@@ -128,7 +129,7 @@ fn resolve_command_path(cmd: &str) -> Option<String> {
 /// Check if a path exists, handling cross-environment cases
 fn path_exists(path: &str, env: &str) -> bool {
     let result = if is_windows() && env == "wsl" {
-        let output = Command::new("wsl")
+        let output = hidden_command("wsl")
             .args(["test", "-d", path])
             .output();
         let ok = output.as_ref().map(|o| o.status.success()).unwrap_or(false);
@@ -213,7 +214,7 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
     } else if is_windows() && project.environment == "wsl" {
         // From Windows, open in WSL: `wsl code /path`
         log_debug(&format!("[open_editor] running from Windows for WSL: wsl {}", editor));
-        Command::new("wsl").arg(&editor).arg(&project.path).spawn()
+        hidden_command("wsl").arg(&editor).arg(&project.path).spawn()
     } else if is_windows() {
         // Windows native: check if it's a .cmd/.bat and wrap accordingly
         launch_windows_editor(&editor, &project.path)

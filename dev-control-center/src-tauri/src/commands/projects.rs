@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 use crate::commands::ecosystems::load_ecosystems;
 use crate::models::project::{Project, ProjectsStore};
+use crate::process::hidden_command;
 
 fn normalize_optional_text(value: Option<String>) -> Option<String> {
     value.and_then(|value| {
@@ -21,7 +21,7 @@ pub(crate) fn is_windows_host() -> bool {
 }
 
 fn run_wslpath(flag: &str, path: &str) -> Result<String, String> {
-    let output = Command::new("wsl")
+    let output = hidden_command("wsl")
         .args(["wslpath", flag, path])
         .output()
         .map_err(|e| format!("No se pudo ejecutar wslpath: {}", e))?;
@@ -342,7 +342,7 @@ pub async fn pick_directory() -> Result<Option<String>, String> {
             .unwrap_or(false);
 
     if is_wsl {
-        let output = std::process::Command::new("powershell.exe")
+        let output = hidden_command("powershell.exe")
             .args([
                 "-NoProfile",
                 "-NonInteractive",
@@ -362,7 +362,7 @@ pub async fn pick_directory() -> Result<Option<String>, String> {
         }
 
         // Convertir ruta Windows (C:\...) a ruta WSL (/mnt/c/...) con wslpath
-        let wsl_path = std::process::Command::new("wslpath")
+        let wsl_path = hidden_command("wslpath")
             .arg(&raw)
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
