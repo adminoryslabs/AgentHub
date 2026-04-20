@@ -1,8 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { type Project } from '../lib/invoke'
 import { openEditor, launchAgent, openTerminal } from '../lib/invoke'
 import { SessionHistory } from './SessionHistory'
 import { ProjectNotesDialog } from './ProjectNotesDialog'
+
+const EDITOR_OPTIONS = [
+  { value: 'vscode', label: 'VSCode' },
+  { value: 'cursor', label: 'Cursor' },
+]
+
+const CLI_OPTIONS = [
+  { value: 'claude', label: 'Claude Code' },
+  { value: 'opencode', label: 'OpenCode' },
+  { value: 'qwen', label: 'QwenCode' },
+]
 
 interface ProjectCardProps {
   project: Project
@@ -16,6 +27,13 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, ecosystemName, onEdit, onDelete, onOpenEditor, onLaunchAgent, onError }: ProjectCardProps) {
   const [isNotesOpen, setIsNotesOpen] = useState(false)
+  const [selectedEditor, setSelectedEditor] = useState(project.preferredEditor || 'vscode')
+  const [selectedCli, setSelectedCli] = useState(project.defaultAgent || 'claude')
+
+  useEffect(() => {
+    setSelectedEditor(project.preferredEditor || 'vscode')
+    setSelectedCli(project.defaultAgent || 'claude')
+  }, [project.defaultAgent, project.preferredEditor])
 
   const handleOpenEditor = async (editor: string) => {
     try {
@@ -63,7 +81,6 @@ export function ProjectCard({ project, ecosystemName, onEdit, onDelete, onOpenEd
       </div>
 
       <div className="mt-3 space-y-1.5">
-        {/* Action row: Continue (primary) */}
         <button
           onClick={() => handleLaunchAgent(project.defaultAgent)}
           className="btn-primary w-full text-center"
@@ -71,31 +88,47 @@ export function ProjectCard({ project, ecosystemName, onEdit, onDelete, onOpenEd
           Continue with {project.defaultAgent}
         </button>
 
-        {/* Editors row */}
-        <div className="flex gap-1.5">
-          <button onClick={() => handleOpenEditor('vscode')} className="btn-ghost flex-1">
-            VSCode
-          </button>
-          <button onClick={() => handleOpenEditor('cursor')} className="btn-ghost flex-1">
-            Cursor
-          </button>
+        <div className="rounded border border-outline/15 px-2 py-2">
+          <div className="flex items-center gap-2">
+            <span className="w-12 shrink-0 text-label-sm text-outline">IDE</span>
+            <select
+              value={selectedEditor}
+              onChange={event => setSelectedEditor(event.target.value)}
+              className="input-field h-8 flex-1 py-1 text-xs"
+            >
+              {EDITOR_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button onClick={() => handleOpenEditor(selectedEditor)} className="btn-ghost shrink-0 px-3 py-1 text-xs">
+              Open
+            </button>
+          </div>
         </div>
 
-        {/* Agents row */}
-        <div className="flex gap-1.5">
-          <button onClick={() => handleLaunchAgent('claude')} className="btn-ghost flex-1">
-            Claude Code
-          </button>
-          <button onClick={() => handleLaunchAgent('opencode')} className="btn-ghost flex-1">
-            OpenCode
-          </button>
-          <button onClick={() => handleLaunchAgent('qwen')} className="btn-ghost flex-1">
-            QwenCode
-          </button>
+        <div className="rounded border border-outline/15 px-2 py-2">
+          <div className="flex items-center gap-2">
+            <span className="w-12 shrink-0 text-label-sm text-outline">CLI</span>
+            <select
+              value={selectedCli}
+              onChange={event => setSelectedCli(event.target.value)}
+              className="input-field h-8 flex-1 py-1 text-xs"
+            >
+              {CLI_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button onClick={() => handleLaunchAgent(selectedCli)} className="btn-ghost shrink-0 px-3 py-1 text-xs">
+              Launch
+            </button>
+          </div>
         </div>
 
-        {/* Terminal row */}
-        <div className="flex gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
           <button onClick={handleOpenTerminal} className="btn-ghost flex-1">
             Terminal
           </button>
@@ -104,8 +137,7 @@ export function ProjectCard({ project, ecosystemName, onEdit, onDelete, onOpenEd
           </button>
         </div>
 
-        {/* Edit/Delete row */}
-        <div className="flex gap-1.5 pt-0.5">
+        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
           <button onClick={onEdit} className="btn-ghost flex-1">
             Edit
           </button>

@@ -112,7 +112,16 @@
 
   /* === Input fields === */
   .input-field {
-    @apply w-full rounded bg-surface-lowest border border-outline/15 px-3 py-1.5 text-sm text-secondary font-mono transition-colors;
+    @apply w-full rounded bg-surface-high border border-outline/20 px-3 py-1.5 text-sm text-on-surface-variant font-mono transition-colors;
+  }
+
+  select.input-field {
+    color-scheme: dark;
+    @apply bg-surface-high text-secondary;
+  }
+
+  select.input-field option {
+    @apply bg-surface text-secondary;
   }
 
   /* === Dialog / Modal overlay === */

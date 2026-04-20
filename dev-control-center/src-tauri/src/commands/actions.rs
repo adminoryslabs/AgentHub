@@ -766,13 +766,13 @@ fn launch_in_terminal(
     if is_wsl() {
         // Running inside WSL → open Windows Terminal via wt.exe
         let full_cmd = format!("cd '{}' && {}", path, cmd);
-        log_debug(&format!("[launch_terminal] WSL mode: wt.exe bash -c '{}'", full_cmd));
+        log_debug(&format!("[launch_terminal] WSL mode: wt.exe bash -ic '{}'", full_cmd));
         Command::new("wt.exe")
             .arg("--title")
             .arg(&title)
             .arg("--")
             .arg("bash")
-            .arg("-c")
+            .arg("-ic")
             .arg(&full_cmd)
             .spawn()
             .map_err(|e| {
@@ -842,7 +842,7 @@ fn launch_in_terminal(
                     "gnome-terminal" => Command::new("gnome-terminal")
                         .arg("--")
                         .arg("bash")
-                        .arg("-c")
+                        .arg("-ic")
                         .arg(&full_cmd)
                         .spawn()
                         .map(|_| ())
@@ -850,14 +850,14 @@ fn launch_in_terminal(
                     "konsole" => Command::new("konsole")
                         .arg("-e")
                         .arg("bash")
-                        .arg("-c")
+                        .arg("-ic")
                         .arg(&full_cmd)
                         .spawn()
                         .map(|_| ())
                         .map_err(|e| format!("{} failed: {}", terminal, e)),
                     _ => Command::new(terminal)
                         .arg("-e")
-                        .arg(format!("bash -c '{}'", full_cmd))
+                        .arg(format!("bash -ic '{}'", full_cmd))
                         .spawn()
                         .map(|_| ())
                         .map_err(|e| format!("{} failed: {}", terminal, e)),

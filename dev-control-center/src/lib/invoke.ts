@@ -146,6 +146,7 @@ export async function launchEcosystemAgent(ecosystemId: string): Promise<string>
 export type SessionEntry = {
   agent: string
   sessionId: string
+  title: string
   modifiedAt: string
   sizeBytes: number
 }

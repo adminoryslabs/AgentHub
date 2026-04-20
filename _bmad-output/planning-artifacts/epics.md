@@ -16,7 +16,7 @@ Este documento contiene la descomposición completa de epics y stories para **De
 
 ## Estado Actual
 
-Estado documental reconciliado contra el código actual y `implementation-artifacts` al 2026-04-18.
+Estado documental reconciliado contra el código actual, `implementation-artifacts` y validación manual del producto al 2026-04-19.
 
 | Epic | Estado actual | Nota |
 |------|---------------|------|
@@ -24,14 +24,14 @@ Estado documental reconciliado contra el código actual y `implementation-artifa
 | Epic 2 | Done | Incluye 2.3 aunque faltaba artifact dedicado |
 | Epic 3 | Done | 3.1 y 3.2 estaban implementados pero el artifact seguia incompleto |
 | Epic 4 | Done | Faltaban artifacts 4.x |
-| Epic 5 | Done con notas | Existe implementacion; discovery real cubre Claude/Qwen y no evidencia completa de OpenCode |
-| Epic 6 | In progress | 6.1-6.4 implementados, 6.5 sigue en backlog |
-| Epic 7 | Backlog | Sin implementacion encontrada |
-| Epic 8 | Backlog | Sin implementacion encontrada |
+| Epic 5 | Done | Implementado y cerrado |
+| Epic 6 | Done | Implementado y cerrado; `sprint-status.yaml` quedo desactualizado en 6.5 |
+| Epic 7 | Done | Implementado y cerrado |
+| Epic 8 | Done | Implementado y cerrado |
 | Continue Work (Neon) | Blocked / deprecated candidate | Sigue dependiendo de Neon |
 | Dashboard con estado (Neon) | Blocked / deprecated candidate | Sigue dependiendo de Neon |
 
-> Nota: los epics 4-8 reflejan la evolucion real del producto despues del plan inicial. Los epics dependientes de Neon permanecen fuera del flujo activo y hoy se consideran bloqueados, con alta probabilidad de quedar deprecados.
+> Nota: los epics 4-8 reflejan la evolucion real del producto despues del plan inicial y hoy se consideran cerrados. Los epics dependientes de Neon permanecen fuera del flujo activo y hoy se consideran bloqueados, con alta probabilidad de quedar deprecados.
 
 ## Requirements Inventory
 
@@ -467,9 +467,9 @@ So that I can find a specific project quickly when I have many.
 
 ## Epic 5: Historial de Sesiones
 
-**Objetivo:** El usuario puede ver y reabrir sesiones existentes de los agentes (Claude, Qwen, OpenCode) que ya están guardadas en el directorio del proyecto.
+**Objetivo:** El usuario puede ver y reabrir sesiones existentes de los agentes (Claude, Qwen, OpenCode) usando el storage real que cada agente exponga localmente.
 
-> **Nota:** Los agentes como Claude Code y QwenCode guardan sus propias sesiones de conversación en el directorio del proyecto (ej: `.claude/`, `.qwen/`). Este epic lee esas sesiones existentes, no crea un log propio.
+> **Nota:** Claude Code y QwenCode exponen sesiones en archivos locales conocidos. OpenCode queda como integracion futura via adapter, sin asumir hoy si su storage real es archivo, base de datos u otro formato. Este epic lee sesiones existentes; no crea un log propio.
 
 ### Story 5.1: Detectar sesiones de agentes en el directorio del proyecto
 
@@ -523,6 +523,75 @@ So that I can continue working in that conversation context.
 **When** el usuario hace clic en una sesión de QwenCode
 **Then** se abre QwenCode en el directorio del proyecto
 
+### Story 5.4: Titulos legibles para sesiones
+
+**Estado:** Done
+
+As a user,
+I want each detected session to show a human-readable title instead of an opaque id,
+So that I can understand what was done in that session before reopening it.
+
+**Acceptance Criteria:**
+
+**Given** una sesion detectada de Claude o Qwen
+**When** el backend enriquece la metadata de la sesion
+**Then** retorna un `title` legible derivado del contenido inicial real de la conversacion
+**And** no expone el `sessionId` como label principal en la UI
+
+**Given** un archivo de sesion grande
+**When** el sistema calcula el titulo
+**Then** lee solo un fragmento acotado del contenido necesario para extraer el primer prompt o texto util
+**And** no necesita cargar el archivo completo en memoria
+
+**Given** que no se puede derivar un titulo util desde el contenido
+**When** el backend normaliza la sesion
+**Then** retorna un fallback legible con agente + fecha relativa o equivalente
+
+### Story 5.5: Orden cronologico correcto y metadata consistente
+
+**Estado:** Done
+
+As a user,
+I want sessions to appear from newest to oldest with reliable timestamps and metadata,
+So that the history reflects my actual recent work.
+
+**Acceptance Criteria:**
+
+**Given** sesiones detectadas de uno o varios agentes
+**When** se muestran en la UI
+**Then** aparecen ordenadas de mas nueva a mas antigua segun `modifiedAt`
+**And** el orden no depende del orden natural del filesystem
+
+**Given** sesiones detectadas en escenarios WSL
+**When** el backend obtiene la metadata
+**Then** resuelve `modifiedAt` y `sizeBytes` reales o una aproximacion consistente basada en el storage real
+**And** evita usar timestamps artificiales como reemplazo silencioso del valor real
+
+**Given** una sesion listada en la UI
+**When** se renderiza
+**Then** muestra claramente a que agente pertenece cada item
+**And** el usuario puede distinguir Claude, Qwen y futuros adapters sin depender del grouping actual
+
+### Story 5.6: Adapter generico para sesiones de OpenCode
+
+**Estado:** Backlog
+
+As a user,
+I want OpenCode sessions to be supported through a dedicated adapter,
+So that the app can list and reopen them without asumir un formato de storage incorrecto.
+
+**Acceptance Criteria:**
+
+**Given** que OpenCode puede persistir sesiones en un formato distinto a archivos `json` o `jsonl`
+**When** se planifica su integracion
+**Then** el sistema define un adapter especifico para discovery, lectura de metadata y resume
+**And** el contrato comun de sesiones se mantiene estable para la UI
+
+**Given** que el storage real de OpenCode aun no esta confirmado
+**When** se documenta esta story
+**Then** el alcance queda redactado en terminos genericos de adapter
+**And** no presupone ruta, formato ni estrategia de parseo hasta validar el storage real
+
 ---
 
 ## ⏸️ Epics Bloqueados / Diferidos
@@ -545,7 +614,7 @@ So that I can continue working in that conversation context.
 
 ---
 
-## 🆕 Epics Nuevos (Backlog para desarrollo futuro)
+## 🆕 Epics Nuevos Incorporados al Producto
 
 ## Epic 6: Quick Wins
 
@@ -633,6 +702,36 @@ So that I don't have to manually create folders before adding projects.
 **Then** se abre un dialog para seleccionar la ubicación padre y el nombre del proyecto
 **And** se crea la carpeta en el filesystem
 **And** se registra automáticamente en `projects.json`
+
+### Story 6.6: Rediseño de ProjectCard para herramientas escalables
+
+**Estado:** Done
+
+As a user,
+I want the project card to separate Continue, IDE tools, and CLI tools,
+So that the UI scales cleanly as new editors and agents are added.
+
+**Acceptance Criteria:**
+
+**Given** un ProjectCard renderizado
+**When** el usuario lo visualiza
+**Then** mantiene la informacion principal del proyecto tal como hoy
+**And** conserva un CTA primario `Continue with {defaultAgent}`
+
+**Given** la seccion de herramientas de edicion
+**When** el usuario interactua con `IDE`
+**Then** puede seleccionar entre los IDEs disponibles para ese proyecto desde un control compacto
+**And** la card no crea un boton fijo adicional por cada IDE futuro
+
+**Given** la seccion de herramientas agenticas
+**When** el usuario interactua con `CLI`
+**Then** puede seleccionar entre los CLIs disponibles para ese proyecto desde un control compacto
+**And** la card puede crecer a futuros agentes como Codex CLI sin explotar en cantidad de botones
+
+**Given** las acciones secundarias del proyecto
+**When** se renderiza la card
+**Then** permanecen visibles `Terminal`, `Notes`, `Edit` y `Delete`
+**And** el layout final prioriza densidad, claridad y escalabilidad sobre una grilla fija de botones
 
 ---
 
