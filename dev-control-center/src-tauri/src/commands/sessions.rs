@@ -236,12 +236,9 @@ fn discover_claude_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, Stri
     }
 
     // Get file metadata directly from WSL so ordering stays correct.
-    let list_cmd = format!(
-        "shopt -s nullglob; for file in '{}'/*.jsonl; do stat -c '%Y\t%s\t%n' \"$file\"; done",
-        escape_single_quotes(&wsl_path)
-    );
+    let list_script = "shopt -s nullglob; for file in \"$1\"/*.jsonl; do [ -f \"$file\" ] || continue; stat -c '%Y\t%s\t%n' -- \"$file\"; done";
     let output = Command::new("wsl")
-        .args(["bash", "-lc", &list_cmd])
+        .args(["bash", "-lc", list_script, "_", &wsl_path])
         .output()
         .map_err(|e| format!("wsl metadata scan failed: {}", e))?;
 
@@ -363,12 +360,9 @@ fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String
     }
 
     // Get file metadata directly from WSL so ordering stays correct.
-    let list_cmd = format!(
-        "shopt -s nullglob; for file in '{}'/*.jsonl; do stat -c '%Y\t%s\t%n' \"$file\"; done",
-        escape_single_quotes(&wsl_path)
-    );
+    let list_script = "shopt -s nullglob; for file in \"$1\"/*.jsonl; do [ -f \"$file\" ] || continue; stat -c '%Y\t%s\t%n' -- \"$file\"; done";
     let output = Command::new("wsl")
-        .args(["bash", "-lc", &list_cmd])
+        .args(["bash", "-lc", list_script, "_", &wsl_path])
         .output()
         .map_err(|e| format!("wsl metadata scan failed: {}", e))?;
 
@@ -451,14 +445,10 @@ fn read_local_prefix_lines(path: &PathBuf, max_lines: usize) -> Result<Vec<Strin
 }
 
 fn read_wsl_prefix_lines(path: &str, max_lines: usize) -> Result<Vec<String>, String> {
-    let head_cmd = format!(
-        "head -n {} '{}'",
-        max_lines,
-        escape_single_quotes(path)
-    );
+    let head_script = format!("head -n {} -- \"$1\"", max_lines);
 
     let output = Command::new("wsl")
-        .args(["bash", "-lc", &head_cmd])
+        .args(["bash", "-lc", &head_script, "_", path])
         .output()
         .map_err(|e| format!("wsl head failed: {}", e))?;
 
@@ -552,10 +542,6 @@ fn normalize_session_title(raw: String) -> Option<String> {
     }
 
     Some(title)
-}
-
-fn escape_single_quotes(value: &str) -> String {
-    value.replace('\'', "'\\''")
 }
 
 fn is_windows() -> bool {
