@@ -235,37 +235,7 @@ fn discover_claude_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, Stri
         return Ok(Vec::new());
     }
 
-    // Get file metadata directly from WSL so ordering stays correct.
-    let list_script = "shopt -s nullglob; for file in \"$1\"/*.jsonl; do [ -f \"$file\" ] || continue; stat -c '%Y\t%s\t%n' -- \"$file\"; done";
-    let output = Command::new("wsl")
-        .args(["bash", "-lc", list_script, "_", &wsl_path])
-        .output()
-        .map_err(|e| format!("wsl metadata scan failed: {}", e))?;
-
-    log_debug(&format!(
-        "[sessions] claude wsl metadata scan status={} stdout_lines={} stderr='{}'",
-        output.status.success(),
-        String::from_utf8_lossy(&output.stdout).lines().count(),
-        String::from_utf8_lossy(&output.stderr).trim()
-    ));
-
-    if !output.status.success() {
-        log_debug("[sessions] claude wsl metadata scan failed");
-        return Ok(Vec::new());
-    }
-
-    let mut sessions = Vec::new();
-
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let Some(candidate) = parse_wsl_metadata_line(line) else { continue; };
-
-        log_debug(&format!("[sessions] claude wsl session: {}", candidate.session_id));
-        if let Some(session) = build_session_entry("claude", candidate) {
-            sessions.push(session);
-        }
-    }
-
-    Ok(sessions)
+    collect_wsl_sessions("claude", &wsl_path)
 }
 
 /// Discover Qwen sessions. If running on Windows with a WSL project path,
@@ -359,43 +329,75 @@ fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String
         return Ok(Vec::new());
     }
 
-    // Get file metadata directly from WSL so ordering stays correct.
-    let list_script = "shopt -s nullglob; for file in \"$1\"/*.jsonl; do [ -f \"$file\" ] || continue; stat -c '%Y\t%s\t%n' -- \"$file\"; done";
-    let output = Command::new("wsl")
-        .args(["bash", "-lc", list_script, "_", &wsl_path])
-        .output()
-        .map_err(|e| format!("wsl metadata scan failed: {}", e))?;
-
-    log_debug(&format!(
-        "[sessions] qwen wsl metadata scan status={} stdout_lines={} stderr='{}'",
-        output.status.success(),
-        String::from_utf8_lossy(&output.stdout).lines().count(),
-        String::from_utf8_lossy(&output.stderr).trim()
-    ));
-
-    if !output.status.success() {
-        log_debug("[sessions] qwen wsl metadata scan failed");
-        return Ok(Vec::new());
-    }
-
-    let mut sessions = Vec::new();
-
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let Some(candidate) = parse_wsl_metadata_line(line) else { continue; };
-
-        log_debug(&format!("[sessions] qwen wsl session: {}", candidate.session_id));
-        if let Some(session) = build_session_entry("qwen", candidate) {
-            sessions.push(session);
-        }
-    }
-
-    Ok(sessions)
+    collect_wsl_sessions("qwen", &wsl_path)
 }
 
 fn format_system_time(time: SystemTime) -> String {
     use chrono::{DateTime, Utc};
     let datetime: DateTime<Utc> = time.into();
     datetime.to_rfc3339()
+}
+
+fn collect_wsl_sessions(agent: &str, directory: &str) -> Result<Vec<SessionEntry>, String> {
+    let list_output = Command::new("wsl")
+        .args(["ls", "-1", directory])
+        .output()
+        .map_err(|e| format!("wsl ls failed: {}", e))?;
+
+    log_debug(&format!(
+        "[sessions] {} wsl ls status={} stdout_lines={} stderr='{}'",
+        agent,
+        list_output.status.success(),
+        String::from_utf8_lossy(&list_output.stdout).lines().count(),
+        String::from_utf8_lossy(&list_output.stderr).trim()
+    ));
+
+    if !list_output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let mut sessions = Vec::new();
+
+    for filename in String::from_utf8_lossy(&list_output.stdout).lines() {
+        let filename = filename.trim();
+        if !filename.ends_with(".jsonl") {
+            continue;
+        }
+
+        let file_path = format!("{}/{}", directory.trim_end_matches('/'), filename);
+        let stat_output = Command::new("wsl")
+            .args(["stat", "-c", "%Y\t%s\t%n", "--", &file_path])
+            .output()
+            .map_err(|e| format!("wsl stat failed: {}", e))?;
+
+        log_debug(&format!(
+            "[sessions] {} wsl stat file='{}' status={} stderr='{}'",
+            agent,
+            file_path,
+            stat_output.status.success(),
+            String::from_utf8_lossy(&stat_output.stderr).trim()
+        ));
+
+        if !stat_output.status.success() {
+            continue;
+        }
+
+        let stat_stdout = String::from_utf8_lossy(&stat_output.stdout).to_string();
+        let Some(line) = stat_stdout.lines().next() else {
+            continue;
+        };
+
+        let Some(candidate) = parse_wsl_metadata_line(line) else {
+            continue;
+        };
+
+        log_debug(&format!("[sessions] {} wsl session: {}", agent, candidate.session_id));
+        if let Some(session) = build_session_entry(agent, candidate) {
+            sessions.push(session);
+        }
+    }
+
+    Ok(sessions)
 }
 
 fn parse_wsl_metadata_line(line: &str) -> Option<SessionCandidate> {
@@ -445,10 +447,10 @@ fn read_local_prefix_lines(path: &PathBuf, max_lines: usize) -> Result<Vec<Strin
 }
 
 fn read_wsl_prefix_lines(path: &str, max_lines: usize) -> Result<Vec<String>, String> {
-    let head_script = format!("head -n {} -- \"$1\"", max_lines);
+    let max_lines_arg = max_lines.to_string();
 
     let output = Command::new("wsl")
-        .args(["bash", "-lc", &head_script, "_", path])
+        .args(["head", "-n", &max_lines_arg, "--", path])
         .output()
         .map_err(|e| format!("wsl head failed: {}", e))?;
 
