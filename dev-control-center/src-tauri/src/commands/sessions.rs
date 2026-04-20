@@ -72,14 +72,30 @@ fn encode_project_path(path: &str) -> String {
 fn normalize_lookup_path(path: &str) -> String {
     let trimmed = path.trim();
     if trimmed.is_empty() {
+        log_debug("[sessions] normalize_lookup_path: empty input");
         return String::new();
     }
 
     if is_wsl_path(trimmed) {
-        return normalize_path_for_storage(trimmed, "wsl")
-            .unwrap_or_else(|_| trimmed.to_string());
+        let normalized = normalize_path_for_storage(trimmed, "wsl")
+            .unwrap_or_else(|err| {
+                log_debug(&format!(
+                    "[sessions] normalize_lookup_path: WSL normalization failed for '{}' error='{}'",
+                    trimmed, err
+                ));
+                trimmed.to_string()
+            });
+        log_debug(&format!(
+            "[sessions] normalize_lookup_path: WSL '{}' -> '{}'",
+            trimmed, normalized
+        ));
+        return normalized;
     }
 
+    log_debug(&format!(
+        "[sessions] normalize_lookup_path: non-WSL '{}' kept as-is",
+        trimmed
+    ));
     trimmed.to_string()
 }
 
@@ -133,6 +149,13 @@ pub async fn get_sessions(req: GetSessionsRequest) -> Result<Vec<SessionEntry>, 
 /// scan via `wsl ls` in the WSL filesystem.
 fn discover_claude_sessions(project_path: &str) -> Result<Vec<SessionEntry>, String> {
     let encoded = encode_project_path(project_path);
+    log_debug(&format!(
+        "[sessions] discover_claude_sessions path='{}' encoded='{}' is_windows={} is_wsl_path={}",
+        project_path,
+        encoded,
+        is_windows(),
+        is_wsl_path(project_path)
+    ));
 
     // If on Windows and project is WSL, scan via wsl
     if is_windows() && is_wsl_path(project_path) {
@@ -190,13 +213,22 @@ fn discover_claude_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Str
 fn discover_claude_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String> {
     let username = whoami();
     let wsl_path = format!("/home/{}/.claude/projects/{}", username, encoded);
-    log_debug(&format!("[sessions] claude wsl scan: {}", wsl_path));
+    log_debug(&format!(
+        "[sessions] claude wsl scan username='{}' encoded='{}' path='{}'",
+        username, encoded, wsl_path
+    ));
 
     // Check if directory exists first
     let dir_check = Command::new("wsl")
         .args(["test", "-d", &wsl_path])
         .output()
         .map_err(|e| format!("wsl test failed: {}", e))?;
+
+    log_debug(&format!(
+        "[sessions] claude wsl dir check status={} stderr='{}'",
+        dir_check.status.success(),
+        String::from_utf8_lossy(&dir_check.stderr).trim()
+    ));
 
     if !dir_check.status.success() {
         log_debug(&format!("[sessions] claude wsl dir does not exist: {}", wsl_path));
@@ -212,6 +244,13 @@ fn discover_claude_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, Stri
         .args(["bash", "-lc", &list_cmd])
         .output()
         .map_err(|e| format!("wsl metadata scan failed: {}", e))?;
+
+    log_debug(&format!(
+        "[sessions] claude wsl metadata scan status={} stdout_lines={} stderr='{}'",
+        output.status.success(),
+        String::from_utf8_lossy(&output.stdout).lines().count(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    ));
 
     if !output.status.success() {
         log_debug("[sessions] claude wsl metadata scan failed");
@@ -236,6 +275,13 @@ fn discover_claude_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, Stri
 /// scan via `wsl ls` in the WSL filesystem.
 fn discover_qwen_sessions(project_path: &str) -> Result<Vec<SessionEntry>, String> {
     let encoded = encode_project_path(project_path);
+    log_debug(&format!(
+        "[sessions] discover_qwen_sessions path='{}' encoded='{}' is_windows={} is_wsl_path={}",
+        project_path,
+        encoded,
+        is_windows(),
+        is_wsl_path(project_path)
+    ));
 
     // If on Windows and project is WSL, scan via wsl
     if is_windows() && is_wsl_path(project_path) {
@@ -294,13 +340,22 @@ fn discover_qwen_sessions(project_path: &str) -> Result<Vec<SessionEntry>, Strin
 fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String> {
     let username = whoami();
     let wsl_path = format!("/home/{}/.qwen/projects/{}/chats", username, encoded);
-    log_debug(&format!("[sessions] qwen wsl scan: {}", wsl_path));
+    log_debug(&format!(
+        "[sessions] qwen wsl scan username='{}' encoded='{}' path='{}'",
+        username, encoded, wsl_path
+    ));
 
     // Check if directory exists first
     let dir_check = Command::new("wsl")
         .args(["test", "-d", &wsl_path])
         .output()
         .map_err(|e| format!("wsl test failed: {}", e))?;
+
+    log_debug(&format!(
+        "[sessions] qwen wsl dir check status={} stderr='{}'",
+        dir_check.status.success(),
+        String::from_utf8_lossy(&dir_check.stderr).trim()
+    ));
 
     if !dir_check.status.success() {
         log_debug(&format!("[sessions] qwen wsl chats dir does not exist: {}", wsl_path));
@@ -316,6 +371,13 @@ fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String
         .args(["bash", "-lc", &list_cmd])
         .output()
         .map_err(|e| format!("wsl metadata scan failed: {}", e))?;
+
+    log_debug(&format!(
+        "[sessions] qwen wsl metadata scan status={} stdout_lines={} stderr='{}'",
+        output.status.success(),
+        String::from_utf8_lossy(&output.stdout).lines().count(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    ));
 
     if !output.status.success() {
         log_debug("[sessions] qwen wsl metadata scan failed");
@@ -401,6 +463,11 @@ fn read_wsl_prefix_lines(path: &str, max_lines: usize) -> Result<Vec<String>, St
         .map_err(|e| format!("wsl head failed: {}", e))?;
 
     if !output.status.success() {
+        log_debug(&format!(
+            "[sessions] wsl head failed path='{}' stderr='{}'",
+            path,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
         return Err("wsl head failed".to_string());
     }
 
@@ -507,6 +574,12 @@ fn is_wsl_path(path: &str) -> bool {
 fn whoami() -> String {
     // Try WSL username first (when running on Windows but scanning WSL filesystem)
     if let Ok(output) = std::process::Command::new("wsl").args(["whoami"]).output() {
+        log_debug(&format!(
+            "[sessions] wsl whoami status={} stdout='{}' stderr='{}'",
+            output.status.success(),
+            String::from_utf8_lossy(&output.stdout).trim(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
         if output.status.success() {
             let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !name.is_empty() {
