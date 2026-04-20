@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use rusqlite::{params, Connection, OpenFlags};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::fs;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use crate::commands::projects::normalize_path_for_storage;
+use crate::commands::projects::{normalize_path_for_storage, resolve_filesystem_path};
 use crate::logging::log_debug;
 use crate::process::hidden_command;
 
@@ -114,6 +115,13 @@ pub async fn get_sessions(req: GetSessionsRequest) -> Result<Vec<SessionEntry>, 
             sessions.extend(qwen);
         }
         Err(e) => log_debug(&format!("[sessions] qwen discovery error: {}", e)),
+    }
+
+    match discover_opencode_sessions(&lookup_path) {
+        Ok(opencode) => {
+            sessions.extend(opencode);
+        }
+        Err(e) => log_debug(&format!("[sessions] opencode discovery error: {}", e)),
     }
 
     sessions.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
@@ -258,10 +266,95 @@ fn discover_qwen_sessions_wsl(encoded: &str) -> Result<Vec<SessionEntry>, String
     collect_wsl_sessions("qwen", &wsl_path)
 }
 
+fn discover_opencode_sessions(project_path: &str) -> Result<Vec<SessionEntry>, String> {
+    let db_path = opencode_db_path(project_path)?;
+    if !std::path::Path::new(&db_path).exists() {
+        return Ok(Vec::new());
+    }
+
+    let conn = Connection::open_with_flags(
+        &db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|e| format!("No se pudo abrir opencode.db: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            "
+            SELECT
+                s.id,
+                s.title,
+                s.time_updated
+            FROM session s
+            JOIN project p ON p.id = s.project_id
+            WHERE s.time_archived IS NULL
+              AND (p.worktree = ?1 OR s.directory = ?1)
+            ORDER BY s.time_updated DESC
+            ",
+        )
+        .map_err(|e| format!("No se pudo preparar query de OpenCode: {}", e))?;
+
+    let rows = stmt
+        .query_map(params![project_path], |row| {
+            let session_id: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let updated_ms: i64 = row.get(2)?;
+
+            Ok(SessionEntry {
+                agent: "opencode".to_string(),
+                session_id,
+                title,
+                modified_at: format_unix_millis(updated_ms),
+                size_bytes: 0,
+            })
+        })
+        .map_err(|e| format!("No se pudo leer sesiones de OpenCode: {}", e))?;
+
+    let mut sessions = Vec::new();
+    for row in rows {
+        let mut session = row.map_err(|e| format!("Fila inválida en sesiones de OpenCode: {}", e))?;
+        if let Some(title) = normalize_session_title(session.title.clone()) {
+            session.title = title;
+            sessions.push(session);
+        }
+    }
+
+    Ok(sessions)
+}
+
 fn format_system_time(time: SystemTime) -> String {
     use chrono::{DateTime, Utc};
     let datetime: DateTime<Utc> = time.into();
     datetime.to_rfc3339()
+}
+
+fn format_unix_millis(timestamp_ms: i64) -> String {
+    use chrono::{TimeZone, Utc};
+
+    Utc.timestamp_millis_opt(timestamp_ms)
+        .single()
+        .unwrap_or_else(|| Utc.timestamp_opt(0, 0).single().expect("unix epoch should exist"))
+        .to_rfc3339()
+}
+
+fn opencode_db_path(project_path: &str) -> Result<String, String> {
+    let username = whoami();
+    let wsl_db_path = format!("/home/{}/.local/share/opencode/opencode.db", username);
+
+    if is_windows() && is_wsl_path(project_path) {
+        return resolve_filesystem_path(&wsl_db_path, "wsl");
+    }
+
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    Ok(PathBuf::from(home)
+        .join(".local")
+        .join("share")
+        .join("opencode")
+        .join("opencode.db")
+        .to_string_lossy()
+        .to_string())
 }
 
 fn collect_wsl_sessions(agent: &str, directory: &str) -> Result<Vec<SessionEntry>, String> {

@@ -581,7 +581,7 @@ So that the history reflects my actual recent work.
 
 ### Story 5.6: Adapter generico para sesiones de OpenCode
 
-**Estado:** Backlog
+**Estado:** Done
 
 As a user,
 I want OpenCode sessions to be supported through a dedicated adapter,
@@ -594,10 +594,10 @@ So that the app can list and reopen them without asumir un formato de storage in
 **Then** el sistema define un adapter especifico para discovery, lectura de metadata y resume
 **And** el contrato comun de sesiones se mantiene estable para la UI
 
-**Given** que el storage real de OpenCode aun no esta confirmado
-**When** se documenta esta story
-**Then** el alcance queda redactado en terminos genericos de adapter
-**And** no presupone ruta, formato ni estrategia de parseo hasta validar el storage real
+**Given** que OpenCode persiste sesiones en `opencode.db`
+**When** el sistema detecta sesiones de OpenCode
+**Then** usa un adapter SQLite read-only para mapear proyecto, sesion, titulo y timestamps
+**And** mantiene el mismo contrato comun de sesiones que usa la UI
 
 ---
 

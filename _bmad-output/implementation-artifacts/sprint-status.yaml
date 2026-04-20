@@ -72,13 +72,13 @@ development_status:
   epic-4-retrospective: optional
 
   # ========== EPIC 5: Historial de Sesiones ==========
-  epic-5: in-progress
+  epic-5: done
   5-1-detectar-sesiones-de-agentes-en-directorio: done
   5-2-mostrar-lista-de-sesiones-expandible: done
   5-3-reabrir-sesion: done
   5-4-titulos-legibles-para-sesiones: done
   5-5-orden-cronologico-correcto-y-metadata-consistente: done
-  5-6-adapter-generico-para-sesiones-de-opencode: backlog
+  5-6-adapter-generico-para-sesiones-de-opencode: done
   epic-5-retrospective: optional
 
   # ========== EPIC 6: Quick Wins ==========
