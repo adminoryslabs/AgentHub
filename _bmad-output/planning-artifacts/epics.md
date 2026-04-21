@@ -25,7 +25,7 @@ Estado documental reconciliado contra el código actual, `implementation-artifac
 | Epic 3 | Done | 3.1 y 3.2 estaban implementados pero el artifact seguia incompleto |
 | Epic 4 | Done | Faltaban artifacts 4.x |
 | Epic 5 | Done | Implementado y cerrado |
-| Epic 6 | In progress | 6.1-6.4 y 6.6 implementados; 6.5 sigue en backlog |
+| Epic 6 | Done | Implementado y cerrado |
 | Epic 7 | Done | Implementado y cerrado |
 | Epic 8 | Done | Implementado y cerrado |
 | Continue Work (Neon) | Blocked / deprecated candidate | Sigue dependiendo de Neon |
@@ -697,6 +697,8 @@ So that I can add projects faster and avoid typos.
 **Then** al seleccionar una carpeta, el campo de ruta se auto-completa con la ruta seleccionada
 
 ### Story 6.5: Crear proyecto desde cero
+
+**Estado:** Done
 
 As a user,
 I want to create a new project directory and register it simultaneously,

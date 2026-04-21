@@ -106,6 +106,7 @@ export type CreateProjectRequest = {
   defaultAgent: string
   tags: string[]
   ecosystemId: string | null
+  createDirectory?: boolean
 }
 
 export async function createProject(req: CreateProjectRequest): Promise<Project> {

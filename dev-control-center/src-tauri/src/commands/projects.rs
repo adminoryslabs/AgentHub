@@ -244,6 +244,32 @@ pub struct CreateProjectRequest {
     pub tags: Vec<String>,
     #[serde(default)]
     pub ecosystem_id: Option<String>,
+    #[serde(default)]
+    pub create_directory: bool,
+}
+
+fn create_project_directory(path: &str, environment: &str) -> Result<(), String> {
+    if environment == "wsl" && is_windows_host() {
+        let output = hidden_command("wsl")
+            .args(["mkdir", "-p", path])
+            .output()
+            .map_err(|e| format!("No se pudo crear la carpeta en WSL: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if stderr.is_empty() {
+                format!("No se pudo crear la carpeta en WSL: {}", path)
+            } else {
+                stderr
+            });
+        }
+
+        return Ok(());
+    }
+
+    let filesystem_path = resolve_filesystem_path(path, environment)?;
+    fs::create_dir_all(&filesystem_path)
+        .map_err(|e| format!("No se pudo crear la carpeta {}: {}", path, e))
 }
 
 #[tauri::command]
@@ -254,6 +280,14 @@ pub async fn create_project(req: CreateProjectRequest) -> Result<Project, String
 
     let mut store = load_projects()?;
     let path = normalize_path_for_storage(&req.path, &req.environment)?;
+
+    if req.create_directory {
+        if path_exists_for_environment(&path, &req.environment)? {
+            return Err(format!("La carpeta ya existe: {}", path));
+        }
+        create_project_directory(&path, &req.environment)?;
+    }
+
     let ecosystem_id = validate_ecosystem_id(parse_ecosystem_id(req.ecosystem_id)?, &req.environment, &path)?;
     let project = Project::new(
         req.name,
@@ -267,6 +301,19 @@ pub async fn create_project(req: CreateProjectRequest) -> Result<Project, String
     store.projects.push(project.clone());
     save_projects(&store)?;
     Ok(project)
+}
+
+fn path_exists_for_environment(path: &str, environment: &str) -> Result<bool, String> {
+    if environment == "wsl" && is_windows_host() {
+        let output = hidden_command("wsl")
+            .args(["test", "-d", path])
+            .output()
+            .map_err(|e| format!("No se pudo validar la ruta WSL: {}", e))?;
+        return Ok(output.status.success());
+    }
+
+    let filesystem_path = resolve_filesystem_path(path, environment)?;
+    Ok(std::path::Path::new(&filesystem_path).exists())
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
