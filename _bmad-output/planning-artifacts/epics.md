@@ -16,7 +16,7 @@ Este documento contiene la descomposición completa de epics y stories para **De
 
 ## Estado Actual
 
-Estado documental reconciliado contra el código actual, `implementation-artifacts` y validación manual del producto al 2026-04-19.
+Estado documental reconciliado contra el código actual, `implementation-artifacts` y validación manual del producto al 2026-04-20.
 
 | Epic | Estado actual | Nota |
 |------|---------------|------|
@@ -25,13 +25,13 @@ Estado documental reconciliado contra el código actual, `implementation-artifac
 | Epic 3 | Done | 3.1 y 3.2 estaban implementados pero el artifact seguia incompleto |
 | Epic 4 | Done | Faltaban artifacts 4.x |
 | Epic 5 | Done | Implementado y cerrado |
-| Epic 6 | Done | Implementado y cerrado; `sprint-status.yaml` quedo desactualizado en 6.5 |
+| Epic 6 | In progress | 6.1-6.4 y 6.6 implementados; 6.5 sigue en backlog |
 | Epic 7 | Done | Implementado y cerrado |
 | Epic 8 | Done | Implementado y cerrado |
 | Continue Work (Neon) | Blocked / deprecated candidate | Sigue dependiendo de Neon |
 | Dashboard con estado (Neon) | Blocked / deprecated candidate | Sigue dependiendo de Neon |
 
-> Nota: los epics 4-8 reflejan la evolucion real del producto despues del plan inicial y hoy se consideran cerrados. Los epics dependientes de Neon permanecen fuera del flujo activo y hoy se consideran bloqueados, con alta probabilidad de quedar deprecados.
+> Nota: los epics 4, 5, 7 y 8 reflejan la evolucion real del producto despues del plan inicial y hoy se consideran cerrados. Epic 6 sigue activo por la story 6.5 en backlog. Los epics dependientes de Neon permanecen fuera del flujo activo y hoy se consideran bloqueados, con alta probabilidad de quedar deprecados.
 
 ## Requirements Inventory
 

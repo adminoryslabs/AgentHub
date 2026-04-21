@@ -126,6 +126,14 @@ fn resolve_command_path(cmd: &str) -> Option<String> {
     None
 }
 
+fn resolve_windows_powershell() -> String {
+    if which("pwsh") {
+        "pwsh".to_string()
+    } else {
+        "powershell.exe".to_string()
+    }
+}
+
 /// Check if a path exists, handling cross-environment cases
 fn path_exists(path: &str, env: &str) -> bool {
     let result = if is_windows() && env == "wsl" {
@@ -616,13 +624,14 @@ pub async fn open_global_terminal(req: OpenGlobalTerminalRequest) -> Result<Stri
                 .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal.", e))?;
         } else if req.shell == "powershell" {
             let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\".to_string());
+            let powershell = resolve_windows_powershell();
             Command::new("wt.exe")
                 .arg("new-tab")
                 .arg("--title")
                 .arg("Dev Control Center — PowerShell")
                 .arg("--startingDirectory")
                 .arg(&home)
-                .arg("pwsh")
+                .arg(&powershell)
                 .arg("-NoExit")
                 .spawn()
                 .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal.", e))?;
@@ -735,13 +744,14 @@ pub async fn open_terminal(req: OpenTerminalRequest) -> Result<String, String> {
     } else if is_windows() {
         // Windows nativo, proyecto también en Windows
         let win_path = path.replace('/', "\\");
+        let powershell = resolve_windows_powershell();
         Command::new("wt.exe")
             .arg("new-tab")
             .arg("--title")
             .arg(&title)
             .arg("--startingDirectory")
             .arg(&win_path)
-            .arg("pwsh")
+            .arg(&powershell)
             .arg("-NoExit")
             .spawn()
             .map_err(|e| format!("wt.exe failed: {}. Asegurate de tener Windows Terminal instalado.", e))?;

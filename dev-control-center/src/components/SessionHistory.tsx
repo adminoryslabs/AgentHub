@@ -132,9 +132,11 @@ export function SessionHistory({ projectPath, projectId, ecosystemId, label = 'S
                         {formatDateRelative(session.modifiedAt)}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] text-outline">
-                      {formatSize(session.sizeBytes)}
-                    </p>
+                    {session.sizeBytes > 0 && (
+                      <p className="mt-1 text-[11px] text-outline">
+                        {formatSize(session.sizeBytes)}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
