@@ -3,14 +3,14 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+use crate::commands::ecosystems::load_ecosystems;
 use crate::commands::projects::load_projects;
 
 fn get_notes_dir() -> PathBuf {
     crate::commands::projects::get_data_dir().join("notes")
 }
 
-fn ensure_notes_dir() -> Result<(), String> {
-    let dir = get_notes_dir();
+fn ensure_dir(dir: &PathBuf) -> Result<(), String> {
     if !dir.exists() {
         fs::create_dir_all(&dir)
             .map_err(|e| format!("No se pudo crear el directorio {}: {}", dir.display(), e))?;
@@ -18,8 +18,28 @@ fn ensure_notes_dir() -> Result<(), String> {
     Ok(())
 }
 
+fn ensure_notes_dir() -> Result<(), String> {
+    ensure_dir(&get_notes_dir())
+}
+
+fn get_project_notes_dir() -> PathBuf {
+    get_notes_dir().join("projects")
+}
+
+fn get_ecosystem_notes_dir() -> PathBuf {
+    get_notes_dir().join("ecosystems")
+}
+
 fn get_project_note_path(project_id: uuid::Uuid) -> PathBuf {
+    get_project_notes_dir().join(format!("{}.md", project_id))
+}
+
+fn get_legacy_project_note_path(project_id: uuid::Uuid) -> PathBuf {
     get_notes_dir().join(format!("{}.md", project_id))
+}
+
+fn get_ecosystem_note_path(ecosystem_id: uuid::Uuid) -> PathBuf {
+    get_ecosystem_notes_dir().join(format!("{}.md", ecosystem_id))
 }
 
 fn get_general_note_path() -> PathBuf {
@@ -36,6 +56,16 @@ fn validate_project_exists(project_id: uuid::Uuid) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_ecosystem_exists(ecosystem_id: uuid::Uuid) -> Result<(), String> {
+    let store = load_ecosystems()?;
+    store
+        .ecosystems
+        .iter()
+        .find(|ecosystem| ecosystem.id == ecosystem_id)
+        .ok_or_else(|| format!("Ecosistema no encontrado: {}", ecosystem_id))?;
+    Ok(())
+}
+
 fn read_note(path: &PathBuf) -> Result<String, String> {
     if !path.exists() {
         return Ok(String::new());
@@ -47,8 +77,20 @@ fn read_note(path: &PathBuf) -> Result<String, String> {
 
 fn write_note(path: &PathBuf, content: &str) -> Result<(), String> {
     ensure_notes_dir()?;
+    if let Some(parent) = path.parent() {
+        ensure_dir(&parent.to_path_buf())?;
+    }
     fs::write(path, content)
         .map_err(|e| format!("No se pudo escribir {}: {}", path.display(), e))
+}
+
+fn read_project_note(project_id: uuid::Uuid) -> Result<String, String> {
+    let note_path = get_project_note_path(project_id);
+    if note_path.exists() {
+        return read_note(&note_path);
+    }
+
+    read_note(&get_legacy_project_note_path(project_id))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,6 +108,19 @@ pub struct SaveProjectNoteRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EcosystemNoteRequest {
+    pub ecosystem_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveEcosystemNoteRequest {
+    pub ecosystem_id: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SaveGeneralNoteRequest {
     pub content: String,
 }
@@ -76,7 +131,7 @@ pub async fn get_project_note(req: ProjectNoteRequest) -> Result<String, String>
         .map_err(|_| format!("ID inválido: {}", req.project_id))?;
 
     validate_project_exists(project_id)?;
-    read_note(&get_project_note_path(project_id))
+    read_project_note(project_id)
 }
 
 #[tauri::command]
@@ -86,6 +141,24 @@ pub async fn save_project_note(req: SaveProjectNoteRequest) -> Result<(), String
 
     validate_project_exists(project_id)?;
     write_note(&get_project_note_path(project_id), &req.content)
+}
+
+#[tauri::command]
+pub async fn get_ecosystem_note(req: EcosystemNoteRequest) -> Result<String, String> {
+    let ecosystem_id = uuid::Uuid::parse_str(&req.ecosystem_id)
+        .map_err(|_| format!("ID inválido: {}", req.ecosystem_id))?;
+
+    validate_ecosystem_exists(ecosystem_id)?;
+    read_note(&get_ecosystem_note_path(ecosystem_id))
+}
+
+#[tauri::command]
+pub async fn save_ecosystem_note(req: SaveEcosystemNoteRequest) -> Result<(), String> {
+    let ecosystem_id = uuid::Uuid::parse_str(&req.ecosystem_id)
+        .map_err(|_| format!("ID inválido: {}", req.ecosystem_id))?;
+
+    validate_ecosystem_exists(ecosystem_id)?;
+    write_note(&get_ecosystem_note_path(ecosystem_id), &req.content)
 }
 
 #[tauri::command]

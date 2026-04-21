@@ -163,6 +163,54 @@ pub struct OpenEditorRequest {
     pub editor: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenEcosystemEditorRequest {
+    pub ecosystem_id: String,
+    pub editor: Option<String>,
+}
+
+fn validate_editor_available(editor: &str, environment: &str) -> Result<(), String> {
+    let editor_available = if is_windows() && environment == "wsl" {
+        true
+    } else {
+        which(editor) || resolve_command_path(editor).is_some()
+    };
+
+    if editor_available {
+        return Ok(());
+    }
+
+    let hint = if is_windows() {
+        match editor {
+            "code" => "VS Code no encontrado. Asegurate de instalar con 'Add to PATH' o reinstala marcando esa opcion.",
+            "cursor" => "Cursor no encontrado en PATH.",
+            _ => return Err(format!("{} no encontrado en PATH. Instalalo primero.", editor)),
+        }
+    } else {
+        return Err(format!("{} no encontrado en PATH. Instalalo primero.", editor));
+    };
+
+    Err(hint.to_string())
+}
+
+fn spawn_editor(editor: &str, path: &str, environment: &str) -> Result<(), String> {
+    let result = if is_wsl() {
+        log_debug("[open_editor] running from WSL: direct launch");
+        Command::new(editor).arg(path).spawn()
+    } else if is_windows() && environment == "wsl" {
+        log_debug(&format!("[open_editor] running from Windows for WSL: wsl {}", editor));
+        hidden_command("wsl").arg(editor).arg(path).spawn()
+    } else if is_windows() {
+        launch_windows_editor(editor, path)
+    } else {
+        log_debug(&format!("[open_editor] native launch: {}", editor));
+        Command::new(editor).arg(path).spawn()
+    };
+
+    result.map(|_| ()).map_err(|e| format!("No se pudo abrir {}: {}", editor, e))
+}
+
 #[tauri::command]
 pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
     let platform = detect_platform();
@@ -184,29 +232,7 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
     let editor = resolve_command(&req.editor);
     log_debug(&format!("[open_editor] resolved '{}' -> '{}'", req.editor, editor));
 
-    // Validate editor exists
-    let editor_available = if is_windows() && project.environment == "wsl" {
-        // WSL project: trust that code/cursor exists in WSL
-        log_debug(&format!("[open_editor] WSL project - trusting '{}' exists in WSL", editor));
-        true
-    } else {
-        let found = which(&editor) || resolve_command_path(&editor).is_some();
-        log_debug(&format!("[open_editor] editor '{}' available in PATH: {}", editor, found));
-        found
-    };
-
-    if !editor_available {
-        let hint = if is_windows() {
-            match editor.as_str() {
-                "code" => "VS Code no encontrado. Asegurate de instalar con 'Add to PATH' o reinstala marcando esa opcion.",
-                "cursor" => "Cursor no encontrado en PATH.",
-                _ => return Err(format!("{} no encontrado en PATH. Instalalo primero.", editor)),
-            }
-        } else {
-            return Err(format!("{} no encontrado en PATH. Instalalo primero.", editor));
-        };
-        return Err(hint.to_string());
-    }
+    validate_editor_available(&editor, &project.environment)?;
 
     // Validate project path exists
     if !path_exists(&project.path, &project.environment) {
@@ -216,32 +242,45 @@ pub async fn open_editor(req: OpenEditorRequest) -> Result<String, String> {
     // Launch editor
     log_debug(&format!("[open_editor] launching '{}' for path='{}' env='{}'", editor, project.path, project.environment));
 
-    let result = if is_wsl() {
-        log_debug("[open_editor] running from WSL: direct launch");
-        Command::new(&editor).arg(&project.path).spawn()
-    } else if is_windows() && project.environment == "wsl" {
-        // From Windows, open in WSL: `wsl code /path`
-        log_debug(&format!("[open_editor] running from Windows for WSL: wsl {}", editor));
-        hidden_command("wsl").arg(&editor).arg(&project.path).spawn()
-    } else if is_windows() {
-        // Windows native: check if it's a .cmd/.bat and wrap accordingly
-        launch_windows_editor(&editor, &project.path)
-    } else {
-        log_debug(&format!("[open_editor] native launch: {}", editor));
-        Command::new(&editor).arg(&project.path).spawn()
-    };
-
-    match &result {
-        Ok(_) => log_debug(&format!("[open_editor] SUCCESS: {} opened", editor)),
-        Err(e) => log_debug(&format!("[open_editor] FAILED: {}", e)),
-    }
-
-    result.map_err(|e| format!("No se pudo abrir {}: {}", editor, e))?;
+    spawn_editor(&editor, &project.path, &project.environment)?;
 
     // Update lastOpenedAt
     let _ = update_last_opened(project_id);
 
     Ok(format!("{} opened in {}", req.editor, project.name))
+}
+
+#[tauri::command]
+pub async fn open_ecosystem_editor(req: OpenEcosystemEditorRequest) -> Result<String, String> {
+    let platform = detect_platform();
+    log_debug(&format!("[open_ecosystem_editor] START ecosystem_id={} platform={}", req.ecosystem_id, platform));
+
+    let ecosystem_id = uuid::Uuid::parse_str(&req.ecosystem_id)
+        .map_err(|_| format!("ID inválido: {}", req.ecosystem_id))?;
+    let ecosystems_store = load_ecosystems()?;
+    let ecosystem = ecosystems_store
+        .ecosystems
+        .iter()
+        .find(|ecosystem| ecosystem.id == ecosystem_id)
+        .ok_or_else(|| format!("Ecosistema no encontrado: {}", req.ecosystem_id))?;
+
+    let editor_name = req.editor.unwrap_or_else(|| ecosystem.preferred_editor.clone());
+    let editor = resolve_command(&editor_name);
+
+    validate_editor_available(&editor, &ecosystem.environment)?;
+
+    if !path_exists(&ecosystem.root_path, &ecosystem.environment) {
+        return Err(format!("Ruta no encontrada: {}", ecosystem.root_path));
+    }
+
+    spawn_editor(&editor, &ecosystem.root_path, &ecosystem.environment)?;
+
+    let projects_store = load_projects()?;
+    for project in projects_store.projects.iter().filter(|project| project.ecosystem_id == Some(ecosystem_id)) {
+        let _ = update_last_opened(project.id);
+    }
+
+    Ok(format!("{} opened in ecosystem {}", editor_name, ecosystem.name))
 }
 
 // ============================================================================
@@ -259,6 +298,7 @@ pub struct LaunchAgentRequest {
 #[serde(rename_all = "camelCase")]
 pub struct LaunchEcosystemAgentRequest {
     pub ecosystem_id: String,
+    pub agent: Option<String>,
 }
 
 #[tauri::command]
@@ -334,7 +374,8 @@ pub async fn launch_ecosystem_agent(req: LaunchEcosystemAgentRequest) -> Result<
 
     let root_path = ecosystem.root_path.clone();
     let environment = ecosystem.environment.clone();
-    let agent = resolve_command(&ecosystem.default_agent);
+    let agent_name = req.agent.unwrap_or_else(|| ecosystem.default_agent.clone());
+    let agent = resolve_command(&agent_name);
     log_debug(&format!("[launch_ecosystem_agent] ecosystem={} env={} root={} agent={}", ecosystem.name, environment, root_path, agent));
 
     let agent_available = if is_windows() && environment == "wsl" {
@@ -363,7 +404,7 @@ pub async fn launch_ecosystem_agent(req: LaunchEcosystemAgentRequest) -> Result<
         let _ = update_last_opened(project.id);
     }
 
-    Ok(format!("{} launched for ecosystem {}", ecosystem.default_agent, ecosystem.name))
+    Ok(format!("{} launched for ecosystem {}", agent_name, ecosystem.name))
 }
 
 // ============================================================================

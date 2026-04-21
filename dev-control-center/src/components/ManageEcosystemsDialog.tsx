@@ -9,6 +9,7 @@ import {
 } from '../lib/invoke'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useUI } from '../contexts/UIContext'
+import { EcosystemNotesDialog } from './EcosystemNotesDialog'
 
 interface ManageEcosystemsDialogProps {
   isOpen: boolean
@@ -25,6 +26,11 @@ const AGENTS = [
   { value: 'qwencode', label: 'QwenCode' },
   { value: 'claude', label: 'Claude Code' },
   { value: 'opencode', label: 'OpenCode' },
+]
+
+const EDITORS = [
+  { value: 'vscode', label: 'VSCode' },
+  { value: 'cursor', label: 'Cursor' },
 ]
 
 function normalizePathForComparison(path: string, env: string) {
@@ -61,11 +67,13 @@ export function ManageEcosystemsDialog({ isOpen, onClose }: ManageEcosystemsDial
   const [name, setName] = useState('')
   const [rootPath, setRootPath] = useState('')
   const [env, setEnv] = useState('wsl')
+  const [preferredEditor, setPreferredEditor] = useState('vscode')
   const [defaultAgent, setDefaultAgent] = useState('qwencode')
   const [assignedProjectIds, setAssignedProjectIds] = useState<Record<string, boolean>>({})
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [notesTarget, setNotesTarget] = useState<{ id: string; name: string } | null>(null)
 
   const loadEcosystems = async () => {
     const data = await getEcosystems()
@@ -109,6 +117,7 @@ export function ManageEcosystemsDialog({ isOpen, onClose }: ManageEcosystemsDial
       setName(selectedEcosystem.name)
       setRootPath(selectedEcosystem.rootPath)
       setEnv(selectedEcosystem.env)
+      setPreferredEditor(selectedEcosystem.preferredEditor)
       setDefaultAgent(selectedEcosystem.defaultAgent)
       setAssignedProjectIds(
         Object.fromEntries(
@@ -121,6 +130,7 @@ export function ManageEcosystemsDialog({ isOpen, onClose }: ManageEcosystemsDial
       setName('')
       setRootPath('')
       setEnv('wsl')
+      setPreferredEditor('vscode')
       setDefaultAgent('qwencode')
       setAssignedProjectIds({})
     }
@@ -154,12 +164,14 @@ export function ManageEcosystemsDialog({ isOpen, onClose }: ManageEcosystemsDial
             name: name.trim(),
             rootPath: rootPath.trim(),
             env,
+            preferredEditor,
             defaultAgent,
           })
         : await createEcosystem({
             name: name.trim(),
             rootPath: rootPath.trim(),
             env,
+            preferredEditor,
             defaultAgent,
           })
 
@@ -262,6 +274,14 @@ export function ManageEcosystemsDialog({ isOpen, onClose }: ManageEcosystemsDial
                 <input value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder="cosnautas" />
               </div>
               <div>
+                <label className="block text-label-sm text-secondary mb-1">Preferred Editor</label>
+                <select value={preferredEditor} onChange={e => setPreferredEditor(e.target.value)} className="input-field">
+                  {EDITORS.map(editor => (
+                    <option key={editor.value} value={editor.value}>{editor.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-label-sm text-secondary mb-1">Default Agent</label>
                 <select value={defaultAgent} onChange={e => setDefaultAgent(e.target.value)} className="input-field">
                   {AGENTS.map(agent => (
@@ -354,9 +374,18 @@ export function ManageEcosystemsDialog({ isOpen, onClose }: ManageEcosystemsDial
             <div className="flex justify-between gap-2 pt-2">
               <div>
                 {selectedEcosystem && (
-                  <button type="button" onClick={handleDelete} disabled={isDeleting} className="btn-danger disabled:opacity-50">
-                    {isDeleting ? 'Deleting...' : 'Delete Ecosystem'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNotesTarget({ id: selectedEcosystem.id, name: selectedEcosystem.name })}
+                      className="btn-ghost"
+                    >
+                      Notes
+                    </button>
+                    <button type="button" onClick={handleDelete} disabled={isDeleting} className="btn-danger disabled:opacity-50">
+                      {isDeleting ? 'Deleting...' : 'Delete Ecosystem'}
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="flex gap-2">
@@ -370,6 +399,15 @@ export function ManageEcosystemsDialog({ isOpen, onClose }: ManageEcosystemsDial
             </div>
           </form>
         </div>
+
+        {notesTarget && (
+          <EcosystemNotesDialog
+            isOpen={true}
+            ecosystemId={notesTarget.id}
+            ecosystemName={notesTarget.name}
+            onClose={() => setNotesTarget(null)}
+          />
+        )}
       </div>
     </div>
   )

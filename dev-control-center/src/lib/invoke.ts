@@ -18,6 +18,7 @@ export type Ecosystem = {
   name: string
   rootPath: string
   env: string
+  preferredEditor: string
   defaultAgent: string
   createdAt: string
 }
@@ -30,6 +31,7 @@ export type CreateEcosystemRequest = {
   name: string
   rootPath: string
   env: string
+  preferredEditor: string
   defaultAgent: string
 }
 
@@ -42,6 +44,7 @@ export type UpdateEcosystemRequest = {
   name: string
   rootPath: string
   env: string
+  preferredEditor: string
   defaultAgent: string
 }
 
@@ -79,6 +82,7 @@ export type ImportEcosystemFolderRequest = {
   name: string
   rootPath: string
   env: string
+  preferredEditor: string
   defaultAgent: string
   selectedPaths: string[]
 }
@@ -140,8 +144,12 @@ export async function launchAgent(projectId: string, agent: string): Promise<str
   return invoke<string>('launch_agent', { req: { projectId, agent } })
 }
 
-export async function launchEcosystemAgent(ecosystemId: string): Promise<string> {
-  return invoke<string>('launch_ecosystem_agent', { req: { ecosystemId } })
+export async function launchEcosystemAgent(ecosystemId: string, agent?: string): Promise<string> {
+  return invoke<string>('launch_ecosystem_agent', { req: { ecosystemId, agent: agent ?? null } })
+}
+
+export async function openEcosystemEditor(ecosystemId: string, editor?: string): Promise<string> {
+  return invoke<string>('open_ecosystem_editor', { req: { ecosystemId, editor: editor ?? null } })
 }
 
 export type SessionEntry = {
@@ -198,6 +206,14 @@ export async function getProjectNote(projectId: string): Promise<string> {
 
 export async function saveProjectNote(projectId: string, content: string): Promise<void> {
   return invoke<void>('save_project_note', { req: { projectId, content } })
+}
+
+export async function getEcosystemNote(ecosystemId: string): Promise<string> {
+  return invoke<string>('get_ecosystem_note', { req: { ecosystemId } })
+}
+
+export async function saveEcosystemNote(ecosystemId: string, content: string): Promise<void> {
+  return invoke<void>('save_ecosystem_note', { req: { ecosystemId, content } })
 }
 
 export async function getGeneralNote(): Promise<string> {

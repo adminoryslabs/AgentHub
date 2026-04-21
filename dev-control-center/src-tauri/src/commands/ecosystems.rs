@@ -57,12 +57,13 @@ fn create_ecosystem_record(
     name: String,
     root_path: String,
     environment: String,
+    preferred_editor: String,
     default_agent: String,
 ) -> Result<Ecosystem, String> {
     validate_unique_name(store, &name, None)?;
     validate_root_path(&root_path, &environment)?;
 
-    let ecosystem = Ecosystem::new(name, root_path, environment, default_agent);
+    let ecosystem = Ecosystem::new(name, root_path, environment, preferred_editor, default_agent);
     store.ecosystems.push(ecosystem.clone());
     Ok(ecosystem)
 }
@@ -109,7 +110,7 @@ fn build_imported_project(path: &str, ecosystem: &Ecosystem) -> Result<Project, 
         name,
         path.to_string(),
         ecosystem.environment.clone(),
-        "vscode".to_string(),
+        ecosystem.preferred_editor.clone(),
         ecosystem.default_agent.clone(),
         Vec::new(),
         Some(ecosystem.id),
@@ -178,6 +179,7 @@ pub struct CreateEcosystemRequest {
     pub root_path: String,
     #[serde(rename = "env")]
     pub environment: String,
+    pub preferred_editor: String,
     pub default_agent: String,
 }
 
@@ -186,7 +188,14 @@ pub async fn create_ecosystem(req: CreateEcosystemRequest) -> Result<Ecosystem, 
     let mut store = load_ecosystems()?;
     let name = normalize_required_text(req.name, "name")?;
     let root_path = normalize_path_for_storage(&normalize_required_text(req.root_path, "rootPath")?, &req.environment)?;
-    let ecosystem = create_ecosystem_record(&mut store, name, root_path, req.environment, req.default_agent)?;
+    let ecosystem = create_ecosystem_record(
+        &mut store,
+        name,
+        root_path,
+        req.environment,
+        req.preferred_editor,
+        req.default_agent,
+    )?;
     save_ecosystems(&store)?;
     Ok(ecosystem)
 }
@@ -254,6 +263,7 @@ pub struct UpdateEcosystemRequest {
     pub root_path: String,
     #[serde(rename = "env")]
     pub environment: String,
+    pub preferred_editor: String,
     pub default_agent: String,
 }
 
@@ -278,6 +288,7 @@ pub async fn update_ecosystem(req: UpdateEcosystemRequest) -> Result<Ecosystem, 
     ecosystem.name = name;
     ecosystem.root_path = root_path;
     ecosystem.environment = req.environment;
+    ecosystem.preferred_editor = req.preferred_editor;
     ecosystem.default_agent = req.default_agent;
 
     let updated = ecosystem.clone();
@@ -292,6 +303,7 @@ pub struct ImportEcosystemFolderRequest {
     pub root_path: String,
     #[serde(rename = "env")]
     pub environment: String,
+    pub preferred_editor: String,
     pub default_agent: String,
     pub selected_paths: Vec<String>,
 }
@@ -358,6 +370,7 @@ pub async fn import_ecosystem_folder(
         name,
         root_path,
         req.environment.clone(),
+        req.preferred_editor,
         req.default_agent,
     )?;
 

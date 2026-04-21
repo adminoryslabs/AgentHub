@@ -5,8 +5,9 @@ import { useUI } from '../contexts/UIContext'
 import { ProjectCard } from './ProjectCard'
 import { AddProjectDialog } from './AddProjectDialog'
 import { AddEcosystemFolderDialog } from './AddEcosystemFolderDialog'
+import { EcosystemNotesDialog } from './EcosystemNotesDialog'
 import { SessionHistory } from './SessionHistory'
-import { getEcosystems, launchEcosystemAgent, type Ecosystem, type Project } from '../lib/invoke'
+import { getEcosystems, launchEcosystemAgent, openEcosystemEditor, type Ecosystem, type Project } from '../lib/invoke'
 
 interface ProjectListProps {
   viewMode: ProjectViewMode
@@ -16,10 +17,22 @@ type EcosystemGroup = {
   key: string
   label: string
   ecosystemId: string | null
+  preferredEditor: string | null
   defaultAgent: string | null
   rootPath: string | null
   projects: Project[]
 }
+
+const EDITOR_OPTIONS = [
+  { value: 'vscode', label: 'VSCode' },
+  { value: 'cursor', label: 'Cursor' },
+]
+
+const CLI_OPTIONS = [
+  { value: 'claude', label: 'Claude Code' },
+  { value: 'opencode', label: 'OpenCode' },
+  { value: 'qwen', label: 'QwenCode' },
+]
 
 export function ProjectList({ viewMode }: ProjectListProps) {
   const { projects, isLoading, error, removeProject } = useProjects()
@@ -31,6 +44,9 @@ export function ProjectList({ viewMode }: ProjectListProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [ecosystems, setEcosystems] = useState<Ecosystem[]>([])
+  const [notesTarget, setNotesTarget] = useState<{ id: string; name: string } | null>(null)
+  const [ecosystemEditors, setEcosystemEditors] = useState<Record<string, string>>({})
+  const [ecosystemAgents, setEcosystemAgents] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -89,8 +105,17 @@ export function ProjectList({ viewMode }: ProjectListProps) {
 
   const handleLaunchEcosystem = async (ecosystemId: string, ecosystemName: string, agent: string) => {
     try {
-      await launchEcosystemAgent(ecosystemId)
+      await launchEcosystemAgent(ecosystemId, agent)
       addToast(`${agent} launched for ecosystem ${ecosystemName}`, 'success')
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : String(err), 'error')
+    }
+  }
+
+  const handleOpenEcosystemEditor = async (ecosystemId: string, ecosystemName: string, editor: string) => {
+    try {
+      await openEcosystemEditor(ecosystemId, editor)
+      addToast(`${editor} opened for ecosystem ${ecosystemName}`, 'success')
     } catch (err) {
       addToast(err instanceof Error ? err.message : String(err), 'error')
     }
@@ -134,6 +159,7 @@ export function ProjectList({ viewMode }: ProjectListProps) {
           key,
           label,
           ecosystemId: ecosystem?.id ?? null,
+          preferredEditor: ecosystem?.preferredEditor ?? null,
           defaultAgent: ecosystem?.defaultAgent ?? null,
           rootPath: ecosystem?.rootPath ?? null,
           projects: [project],
@@ -164,6 +190,28 @@ export function ProjectList({ viewMode }: ProjectListProps) {
       return next
     })
   }, [ecosystemGroups, viewMode])
+
+  useEffect(() => {
+    setEcosystemEditors(current => {
+      const next = { ...current }
+      for (const group of ecosystemGroups) {
+        if (group.ecosystemId && !next[group.ecosystemId]) {
+          next[group.ecosystemId] = group.preferredEditor ?? 'vscode'
+        }
+      }
+      return next
+    })
+
+    setEcosystemAgents(current => {
+      const next = { ...current }
+      for (const group of ecosystemGroups) {
+        if (group.ecosystemId && !next[group.ecosystemId]) {
+          next[group.ecosystemId] = group.defaultAgent ?? 'opencode'
+        }
+      }
+      return next
+    })
+  }, [ecosystemGroups])
 
   const toggleGroup = (key: string) => {
     setExpandedGroups(current => ({
@@ -307,13 +355,15 @@ export function ProjectList({ viewMode }: ProjectListProps) {
           <div className="space-y-4">
             {ecosystemGroups.map(group => {
               const isExpanded = expandedGroups[group.key] ?? true
+              const groupEditor = group.ecosystemId ? (ecosystemEditors[group.ecosystemId] ?? group.preferredEditor ?? 'vscode') : 'vscode'
               const groupAgent = group.defaultAgent ?? 'opencode'
+              const selectedAgent = group.ecosystemId ? (ecosystemAgents[group.ecosystemId] ?? groupAgent) : groupAgent
               const canOpenAll = group.ecosystemId !== null
 
               return (
                 <section key={group.key} className="card space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                  <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
                       <h2 className="text-sm font-headline text-secondary">{group.label}</h2>
                       <p className="text-label-sm text-on-surface-variant mt-1">
                         {group.projects.length} project{group.projects.length !== 1 ? 's' : ''}
@@ -325,24 +375,85 @@ export function ProjectList({ viewMode }: ProjectListProps) {
                       )}
                     </div>
 
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 lg:max-w-[58%] lg:pr-20">
                       {canOpenAll && (
-                        <button
-                          type="button"
-                          onClick={() => handleLaunchEcosystem(group.ecosystemId!, group.label, groupAgent)}
-                          className="btn-primary"
-                        >
-                          Open All with {groupAgent}
-                        </button>
+                        <>
+                          <div className="rounded border border-outline/15 px-2 py-2 min-w-[280px] flex-1 lg:flex-none lg:w-[320px]">
+                            <div className="flex items-center gap-2">
+                              <span className="w-12 shrink-0 text-label-sm text-outline">IDE</span>
+                              <select
+                                value={groupEditor}
+                                onChange={event =>
+                                  setEcosystemEditors(current => ({
+                                    ...current,
+                                    [group.ecosystemId!]: event.target.value,
+                                  }))
+                                }
+                                className="input-field h-8 flex-1 py-1 text-xs"
+                              >
+                                {EDITOR_OPTIONS.map(option => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEcosystemEditor(group.ecosystemId!, group.label, groupEditor)}
+                                className="btn-ghost shrink-0 px-3 py-1 text-xs"
+                              >
+                                Open
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="rounded border border-outline/15 px-2 py-2 min-w-[280px] flex-1 lg:flex-none lg:w-[320px]">
+                            <div className="flex items-center gap-2">
+                              <span className="w-12 shrink-0 text-label-sm text-outline">CLI</span>
+                              <select
+                                value={selectedAgent}
+                                onChange={event =>
+                                  setEcosystemAgents(current => ({
+                                    ...current,
+                                    [group.ecosystemId!]: event.target.value,
+                                  }))
+                                }
+                                className="input-field h-8 flex-1 py-1 text-xs"
+                              >
+                                {CLI_OPTIONS.map(option => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleLaunchEcosystem(group.ecosystemId!, group.label, selectedAgent)}
+                                className="btn-ghost shrink-0 px-3 py-1 text-xs"
+                              >
+                                Launch
+                              </button>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setNotesTarget({ id: group.ecosystemId!, name: group.label })}
+                            className="btn-ghost inline-flex h-8 shrink-0 items-center px-3 py-1 text-xs"
+                          >
+                            Notes
+                          </button>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => toggleGroup(group.key)}
-                        className="btn-ghost"
-                      >
-                        {isExpanded ? 'Collapse' : 'Expand'}
-                      </button>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.key)}
+                      className="btn-ghost shrink-0 self-start px-1.5 py-0.5 text-[10px] leading-none lg:absolute lg:right-0 lg:top-0"
+                    >
+                      {isExpanded ? 'Collapse' : 'Expand'}
+                    </button>
                   </div>
 
                   {canOpenAll && group.rootPath && (
@@ -374,6 +485,15 @@ export function ProjectList({ viewMode }: ProjectListProps) {
         isOpen={isEcosystemDialogOpen}
         onClose={() => setIsEcosystemDialogOpen(false)}
       />
+
+      {notesTarget && (
+        <EcosystemNotesDialog
+          isOpen={true}
+          ecosystemId={notesTarget.id}
+          ecosystemName={notesTarget.name}
+          onClose={() => setNotesTarget(null)}
+        />
+      )}
 
       {deleteConfirm && (
         <div className="dialog-overlay" onClick={() => setDeleteConfirm(null)}>

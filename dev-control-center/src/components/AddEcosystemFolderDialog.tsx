@@ -24,11 +24,17 @@ const AGENTS = [
   { value: 'opencode', label: 'OpenCode' },
 ]
 
+const EDITORS = [
+  { value: 'vscode', label: 'VSCode' },
+  { value: 'cursor', label: 'Cursor' },
+]
+
 export function AddEcosystemFolderDialog({ isOpen, onClose }: AddEcosystemFolderDialogProps) {
   const { refreshProjects } = useProjects()
   const [name, setName] = useState('')
   const [rootPath, setRootPath] = useState('')
   const [env, setEnv] = useState('wsl')
+  const [preferredEditor, setPreferredEditor] = useState('vscode')
   const [defaultAgent, setDefaultAgent] = useState('qwencode')
   const [candidates, setCandidates] = useState<ScanEcosystemFolderCandidate[]>([])
   const [selectedPaths, setSelectedPaths] = useState<Record<string, boolean>>({})
@@ -44,6 +50,7 @@ export function AddEcosystemFolderDialog({ isOpen, onClose }: AddEcosystemFolder
     setName('')
     setRootPath('')
     setEnv('wsl')
+    setPreferredEditor('vscode')
     setDefaultAgent('qwencode')
     setCandidates([])
     setSelectedPaths({})
@@ -123,6 +130,7 @@ export function AddEcosystemFolderDialog({ isOpen, onClose }: AddEcosystemFolder
         name: name.trim(),
         rootPath: rootPath.trim(),
         env,
+        preferredEditor,
         defaultAgent,
         selectedPaths: paths,
       })
@@ -154,6 +162,18 @@ export function AddEcosystemFolderDialog({ isOpen, onClose }: AddEcosystemFolder
                 className="input-field"
                 placeholder="cosnautas"
               />
+            </div>
+            <div>
+              <label className="block text-label-sm text-secondary mb-1">Preferred Editor</label>
+              <select
+                value={preferredEditor}
+                onChange={e => setPreferredEditor(e.target.value)}
+                className="input-field"
+              >
+                {EDITORS.map(editor => (
+                  <option key={editor.value} value={editor.value}>{editor.label}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-label-sm text-secondary mb-1">Default Agent</label>

@@ -2,6 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+fn default_preferred_editor() -> String {
+    "vscode".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ecosystem {
@@ -10,6 +14,8 @@ pub struct Ecosystem {
     pub root_path: String,
     #[serde(rename = "env")]
     pub environment: String,
+    #[serde(default = "default_preferred_editor")]
+    pub preferred_editor: String,
     pub default_agent: String,
     pub created_at: DateTime<Utc>,
 }
@@ -19,6 +25,7 @@ impl Ecosystem {
         name: String,
         root_path: String,
         environment: String,
+        preferred_editor: String,
         default_agent: String,
     ) -> Self {
         Self {
@@ -26,6 +33,7 @@ impl Ecosystem {
             name,
             root_path,
             environment,
+            preferred_editor,
             default_agent,
             created_at: Utc::now(),
         }
