@@ -415,7 +415,11 @@ pub async fn resume_agent_session(req: ResumeAgentSessionRequest) -> Result<Stri
     }
 
     // Build resume command
-    let resume_flag = if agent == "claude" { "-r" } else { "--resume" };
+    let resume_flag = match agent.as_str() {
+        "claude" => "-r",
+        "opencode" => "--session",
+        _ => "--resume",
+    };
     let resume_cmd = format!("{} {} {}", agent, resume_flag, session_id);
     log_debug(&format!("[resume_session] command: '{}'", resume_cmd));
 
@@ -468,7 +472,11 @@ pub async fn resume_ecosystem_agent_session(req: ResumeEcosystemAgentSessionRequ
         return Err(hint);
     }
 
-    let resume_flag = if agent == "claude" { "-r" } else { "--resume" };
+    let resume_flag = match agent.as_str() {
+        "claude" => "-r",
+        "opencode" => "--session",
+        _ => "--resume",
+    };
     let resume_cmd = format!("{} {} {}", agent, resume_flag, session_id);
 
     if !path_exists(&ecosystem.root_path, &ecosystem.environment) {
